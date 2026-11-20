@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>守墙 · 三路</title>
+<style>
+  :root{ --bg:#0b1018; --panel:#131c29; --ink:#e8eef7; --muted:#7d8ca3; --gold:#e2c14a; }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#070a10;color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  #wrap{position:relative;width:960px;height:640px;margin:24px auto;}
+  canvas{display:block;border-radius:14px;background:var(--bg);
+    box-shadow:0 24px 80px rgba(0,0,0,.65),0 0 0 1px #1d2836;}
+  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(7,10,16,.88);border-radius:14px;}
+  #overlay.show{display:flex;}
+  .card{width:680px;padding:34px 38px;background:var(--panel);border:1px solid #223047;
+    border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.55);}
+  .card h1{font-size:28px;margin:0 0 10px;letter-spacing:.02em;}
+  .card h2{font-size:21px;margin:0 0 8px;}
+  .card p{color:var(--muted);line-height:1.75;font-size:14px;margin:7px 0;}
+  .card p b{color:var(--ink);}
+  .cards{display:flex;gap:12px;margin-top:20px;}
+  .ucard{flex:1;padding:16px 16px 18px;border:1px solid #223047;border-radius:12px;background:#0f1826;
+    cursor:pointer;transition:.15s;}
+  .ucard:hover{border-color:var(--gold);transform:translateY(-3px);}
+  .ucard b{display:block;font-size:16px;margin-bottom:7px;color:var(--gold);}
+  .ucard span{font-size:13px;color:var(--muted);line-height:1.65;}
+  .btn{display:inline-block;margin-top:22px;padding:11px 24px;border-radius:10px;
+    background:var(--gold);color:#1a1405;font-weight:700;cursor:pointer;border:none;font-size:15px;}
+  .btn:hover{filter:brightness(1.08)}
+  .mono{font-family:ui-monospace,Menlo,monospace;font-size:14px;line-height:2;}
+  .dim{color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="960" height="640"></canvas>
+  <div id="overlay"></div>
+</div>
+<script>
+(function(){
+'use strict';
+
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var overlay = document.getElementById('overlay');
+
+var W = 960, H = 640;
+var LANES = [200, 480, 760];
+var SPAWN_Y = 96;
+var WALL_TOP = 528, WALL_H = 54;
+var TURRET = { x: 480, y: 606 };
+var ELEM_CAP = 4;
+var SHOT_SPEED = 1250;
+var DIFF = 1.0;              // 全局难度旋钮：直接乘在怪物血量上
+
+// ---------------------------------------------------------------- 数据
+
+var ELEM = {
+  fire:  { name: '火', color: '#ff7a45' },
+  water: { name: '水', color: '#4aa3ff' },
+  earth: { name: '土', color: '#d4a72c' },
+  wind:  { name: '风', color: '#5ad2b0' }
+};
+var ELEM_KEYS = ['fire', 'water', 'earth', 'wind'];
+
+var FUSIONS = {
+  light:  { key: 'Q', name: '照明弹', combo: { earth: 1, fire: 1 },  dur: 7, color: '#ffe08a' },
+  scorch: { key: 'W', name: '焚风',   combo: { fire: 1, wind: 1 },   dur: 8, color: '#ff6b3d' },
+  mud:    { key: 'E', name: '泥沼',   combo: { water: 1, earth: 1 }, dur: 8, color: '#d99a52' }
+};
+
+var TYPES = {
+  grunt:   { name: '小兵', ch: '兵', hp: 58, spd: 54,  breach: 8, r: 15, color: '#d8613c', dodge: 0,    heal: 0, drop: 'fire' },
+  phantom: { name: '幻影', ch: '影', hp: 76, spd: 62,  breach: 10, r: 15, color: '#8f7bd6', dodge: 0.5,  dr: 0.5, heal: 0, drop: 'earth' },
+  regen:   { name: '再生', ch: '生', hp: 148, spd: 40, breach: 6, r: 18, color: '#3fa574', dodge: 0,    heal: 7, drop: 'wind' },
+  runner:  { name: '疾行', ch: '疾', hp: 60, spd: 112, breach: 12, r: 13, color: '#e2c14a', dodge: 0,    heal: 0, drop: 'water' }
+};
+
+var UPGRADES = [
+  { id: 'pierce', name: '穿透',   desc: '箭矢可以穿过 2 个额外目标。',
+    apply: function (p) { p.pierce += 2; } },
+  { id: 'multi',  name: '三连发', desc: '每次射击同时打三路，每发 62% 伤害。',
+    apply: function (p) { p.multi = 1; } },
+  { id: 'charge', name: '蓄力箭', desc: '每第 4 发为 3 倍伤害，且无视幻影的虚化。',
+    apply: function (p) { p.chargeEvery = p.chargeEvery > 4 ? 4 : (p.chargeEvery ? p.chargeEvery - 1 : 4); } },
+  { id: 'range',  name: '长弓',   desc: '射程 +30%，更早开始输出。',
+    apply: function (p) { p.range *= 1.3; } }
+];
+
+function seq(t0, lane, type, n, gap) {
+  var a = [];
+  for (var i = 0; i < n; i++) a.push({ t: t0 + i * gap, lane: lane, type: type });
+  return a;
+}
+function merge() {
+  var out = [];
+  for (var i = 0; i < arguments.length; i++) out = out.concat(arguments[i]);
+  return out.sort(function (a, b) { return a.t - b.t; });
+}
+
+var LEVELS = [
+  { name: '第一关 · 试刀', hpMul: 1.0,
+    tip: '杀怪掉元素（兵→火 影→土 生→风 疾→水），凑够两种就按 Q/W/E',
+    spawns: merge(
+      seq(1.2, 0, 'grunt', 2, 3.0),
+      seq(4.2, 1, 'grunt', 2, 3.0),
+      seq(7.2, 2, 'grunt', 2, 3.0)
+    ),
+    grant: { fire: 1, wind: 1 } },
+
+  { name: '第二关 · 影', hpMul: 1.0,
+    tip: '幻影虚化，箭只伤它三成 —— 土 + 火 = 照明弹',
+    spawns: merge(
+      seq(1.2, 0, 'phantom', 2, 3.6),
+      seq(2.4, 1, 'phantom', 2, 3.6),
+      seq(3.6, 2, 'phantom', 2, 3.6),
+      seq(8.0, 1, 'grunt', 4, 2.4)
+    ),
+    grant: { earth: 1, water: 1 } },
+
+  { name: '第三关 · 生', hpMul: 1.2, supply: 'wind',
+    tip: '再生会回血 —— 火 + 风 = 焚风',
+    spawns: merge(
+      seq(1.5, 0, 'regen', 1, 1),
+      seq(4.0, 1, 'regen', 1, 1),
+      seq(6.5, 2, 'regen', 1, 1),
+      seq(9.0, 0, 'regen', 1, 1),
+      seq(3.0, 2, 'grunt', 3, 3.0),
+      seq(10.0, 0, 'grunt', 4, 2.8)
+    ),
+    grant: { fire: 1, wind: 1 } },
+
+  { name: '第四关 · 疾', hpMul: 1.5, supply: 'water',
+    tip: '疾行很快 —— 水 + 土 = 泥沼',
+    spawns: merge(
+      seq(1.2, 0, 'runner', 3, 2.6),
+      seq(2.0, 1, 'runner', 3, 2.6),
+      seq(2.8, 2, 'runner', 3, 2.6),
+      seq(7.0, 1, 'grunt', 6, 2.4)
+    ),
+    grant: { earth: 1, water: 1 } },
+
+  { name: '第五关 · 混', hpMul: 1.6, supply: 'fire',
+    tip: '三种一起上。把元素花在刀刃上。',
+    spawns: merge(
+      seq(1.0, 0, 'phantom', 2, 3.6),
+      seq(2.0, 2, 'regen', 1, 1),
+      seq(3.0, 1, 'runner', 3, 2.4),
+      seq(6.0, 1, 'grunt', 3, 2.4),
+      seq(8.0, 0, 'runner', 2, 2.6),
+      seq(9.0, 2, 'phantom', 1, 1),
+      seq(11.0, 1, 'regen', 1, 1),
+      seq(12.0, 0, 'grunt', 3, 2.4)
+    ),
+    grant: null }
+];
+
+// ---------------------------------------------------------------- 状态
+
+var S = null;
+
+function newState() {
+  return {
+    scene: 'title',
+    level: 0,
+    wall: 100,
+    wallMax: 100,
+    elems: { fire: 1, earth: 1, water: 1, wind: 1 },
+    player: { dmg: 9, cd: 0.36, range: 480, pierce: 0, multi: 0, chargeEvery: 0 },
+    monsters: [],
+    shots: [],
+    spawns: [],
+    t: 0,
+    shotTimer: 0,
+    shotIdx: 0,
+    aim: -Math.PI / 2,
+    fx: { light: 0, scorch: 0, mud: 0 },
+    channel: null,
+    focus: null,
+    paused: false,
+    toast: null,
+    flash: 0,
+    nextId: 1,
+    showDev: false,
+    stats: { shots: 0, hits: 0, weakened: 0, healed: 0, kills: 0, keys: 0, picked: 0, reach: {} },
+    pops: [],
+    elFlash: {},
+    impacts: [],
+  };
+}
+
+// ---------------------------------------------------------------- 流程
+
+function resetGame() {
+  S = newState();
+}
+
+function startLevel(i) {
+  S.level = i;
+  S.scene = 'play';
+  S.monsters = [];
+  S.shots = [];
+  S.spawns = LEVELS[i].spawns.map(function (o) { return { t: o.t, lane: o.lane, type: o.type }; });
+  S.t = 0;
+  S.shotTimer = 0.5;
+  S.shotIdx = 0;
+  S.fx = { light: 0, scorch: 0, mud: 0 };
+  S.channel = null;
+  S.paused = false;
+  S.pops = [];
+  S.impacts = [];
+  var sup = LEVELS[i].supply;
+  if (sup) S.elems[sup] = Math.min(ELEM_CAP, (S.elems[sup] || 0) + 1);
+  S.toast = { text: LEVELS[i].name + '　·　' + LEVELS[i].tip, t: 2.8 };
+  overlay.className = '';
+  overlay.innerHTML = '';
+}
+
+function toast(text) {
+  S.toast = { text: text, t: 1.6 };
+}
+
+function lose() {
+  S.scene = 'lose';
+  showLose();
+}
+
+function win() {
+  S.scene = 'win';
+  showWin();
+}
+
+function levelClear() {
+  if (S.level >= LEVELS.length - 1) { win(); return; }
+  S.wall = Math.min(S.wallMax, S.wall + 15);
+  S.scene = 'upgrade';
+  showUpgrade();
+}
+
+// ---------------------------------------------------------------- 战斗
+
+function spawn(o) {
+  var T = TYPES[o.type];
+  var mul = LEVELS[S.level].hpMul || 1;
+  var hp = Math.round(T.hp * mul * DIFF);
+  S.monsters.push({
+    id: S.nextId++,
+    type: o.type,
+    lane: o.lane,
+    x: LANES[o.lane],
+    y: SPAWN_Y,
+    hp: hp,
+    max: hp,
+    hurt: 0
+  });
+}
+
+function pickTargets() {
+  var alive = S.monsters;
+  if (!alive.length) return [];
+  var byLane = function (l) {
+    var best = null;
+    for (var i = 0; i < alive.length; i++) {
+      var m = alive[i];
+      if (m.lane !== l) continue;
+      if (!best || m.y > best.y) best = m;
+    }
+    return best;
+  };
+  if (S.player.multi) {
+    var out = [];
+    for (var l = 0; l < 3; l++) { var m = byLane(l); if (m) out.push(m); }
+    return out;
+  }
+  if (S.focus != null) {
+    var f = byLane(S.focus);
+    if (f) return [f];
+  }
+  var best = null;
+  for (var i = 0; i < alive.length; i++) if (!best || alive[i].y > best.y) best = alive[i];
+  return best ? [best] : [];
+}
+
+function aimPoint(t) {
+  var T = TYPES[t.type];
+  var spd = T.spd * (S.fx.mud > 0 ? 0.32 : 1);
+  var px = t.x, py = t.y;
+  for (var n = 0; n < 3; n++) {
+    var dx = px - TURRET.x, dy = py - TURRET.y;
+    var d = Math.sqrt(dx * dx + dy * dy) || 1;
+    var tt = d / SHOT_SPEED;
+    py = t.y + spd * tt;
+  }
+  return { x: px, y: py };
+}
+
+function fire(targets) {
+  var p = S.player;
+  var charged = p.chargeEvery > 0 && (++S.shotIdx % p.chargeEvery === 0);
+  var mult = charged ? 3 : 1;
+  for (var i = 0; i < targets.length; i++) {
+    var t = targets[i];
+    var ap = aimPoint(t);
+    var dx = ap.x - TURRET.x, dy = ap.y - TURRET.y;
+    var d = Math.sqrt(dx * dx + dy * dy) || 1;
+    var sp = SHOT_SPEED;
+    S.shots.push({
+      x: TURRET.x, y: TURRET.y - 16,
+      px: TURRET.x, py: TURRET.y - 16,
+      vx: dx / d * sp, vy: dy / d * sp,
+      dmg: p.dmg * mult * (p.multi ? 0.62 : 1),
+      pierce: p.pierce,
+      ignoreDodge: charged,
+      charged: charged,
+      hits: {}
+    });
+    S.stats.shots++;
+  }
+  S.aim = Math.atan2(targets[0].y - TURRET.y, targets[0].x - TURRET.x) + Math.PI / 2;
+}
+
+function update(dt) {
+  if (!S || S.scene !== 'play' || S.paused) return;
+  if (dt > 0.06) dt = 0.06;
+  S.t += dt;
+  if (S.flash > 0) S.flash -= dt;
+  if (S.toast) { S.toast.t -= dt; if (S.toast.t <= 0) S.toast = null; }
+
+  for (var k in S.fx) if (S.fx[k] > 0) S.fx[k] = Math.max(0, S.fx[k] - dt);
+  for (var pi = S.pops.length - 1; pi >= 0; pi--) {
+    S.pops[pi].t -= dt;
+    S.pops[pi].y -= 36 * dt;
+    if (S.pops[pi].t <= 0) S.pops.splice(pi, 1);
+  }
+  for (var ek in S.elFlash) if (S.elFlash[ek] > 0) S.elFlash[ek] = Math.max(0, S.elFlash[ek] - dt);
+  for (var ii = S.impacts.length - 1; ii >= 0; ii--) {
+    S.impacts[ii].t -= dt;
+    if (S.impacts[ii].t <= 0) S.impacts.splice(ii, 1);
+  }
+
+  if (S.channel) {
+    S.channel.t += dt;
+    if (S.channel.t >= S.channel.dur) {
+      S.fx[S.channel.id] = FUSIONS[S.channel.id].dur;
+      S.channel = null;
+      S.flash = 0.3;
+    }
+  }
+
+  while (S.spawns.length && S.spawns[0].t <= S.t) spawn(S.spawns.shift());
+
+  for (var i = S.monsters.length - 1; i >= 0; i--) {
+    var m = S.monsters[i], T = TYPES[m.type];
+    if (m.hurt > 0) m.hurt -= dt;
+
+    var spd = T.spd * (S.fx.mud > 0 ? 0.32 : 1);
+    m.x += (LANES[m.lane] - m.x) * Math.min(1, dt * 3);
+    m.y += spd * dt;
+    if (m.y >= WALL_TOP - 10) {
+      S.wall -= T.breach;
+      S.stats.reach[m.type] = (S.stats.reach[m.type] || 0) + 1;
+      S.impacts.push({ x: m.x, t: 0.45 });
+      S.monsters.splice(i, 1);
+      if (S.wall <= 0) { S.wall = 0; lose(); return; }
+      continue;
+    }
+
+    if (T.heal && S.fx.scorch <= 0 && m.hp < m.max) {
+      var h = Math.min(T.heal * dt, m.max - m.hp);
+      m.hp += h;
+      S.stats.healed += h;
+    }
+    if (S.fx.scorch > 0) m.hp -= 14 * dt;
+
+    if (m.hp <= 0) { killMonster(i); }
+  }
+
+  if (!S.channel) {
+    S.shotTimer -= dt;
+    if (S.shotTimer <= 0) {
+      var tg = pickTargets();
+      if (tg.length) { fire(tg); S.shotTimer = S.player.cd; }
+      else S.shotTimer = 0.06;
+    }
+  }
+
+  for (var j = S.shots.length - 1; j >= 0; j--) {
+    var s = S.shots[j];
+    s.px = s.x; s.py = s.y;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    var distT = Math.sqrt((s.x - TURRET.x) * (s.x - TURRET.x) + (s.y - TURRET.y) * (s.y - TURRET.y));
+    if (s.y < 40 || distT > S.player.range + 40 || s.x < 0 || s.x > W) { S.shots.splice(j, 1); continue; }
+
+    var dead = false;
+    for (var q = 0; q < S.monsters.length; q++) {
+      var mm = S.monsters[q], TT = TYPES[mm.type];
+      if (s.hits[mm.id]) continue;
+      if (segDist(s.px, s.py, s.x, s.y, mm.x, mm.y) > TT.r + 7) continue;
+      s.hits[mm.id] = 1;
+      var ratio = (s.ignoreDodge || S.fx.light > 0) ? 1 : (TT.dr || 1);
+      if (ratio < 1) S.stats.weakened++;
+      mm.hp -= s.dmg * ratio * (S.fx.light > 0 ? 1.35 : 1);
+      mm.hurt = 0.12;
+      S.stats.hits++;
+      if (s.pierce > 0) s.pierce--;
+      else { dead = true; break; }
+    }
+    if (dead) S.shots.splice(j, 1);
+  }
+
+  if (!S.channel && !S.spawns.length && !S.monsters.length) levelClear();
+}
+
+function segDist(px, py, x, y, cx, cy) {
+  var dx = x - px, dy = y - py;
+  var l2 = dx * dx + dy * dy;
+  var t = l2 ? ((cx - px) * dx + (cy - py) * dy) / l2 : 0;
+  if (t < 0) t = 0; else if (t > 1) t = 1;
+  var qx = px + dx * t, qy = py + dy * t;
+  return Math.sqrt((cx - qx) * (cx - qx) + (cy - qy) * (cy - qy));
+}
+
+function killMonster(i) {
+  var m = S.monsters[i];
+  var T = TYPES[m.type];
+  S.monsters.splice(i, 1);
+  S.stats.kills++;
+  if (T.drop) {
+    var k = T.drop;
+    var full = (S.elems[k] || 0) >= ELEM_CAP;
+    if (!full) { S.elems[k] = (S.elems[k] || 0) + 1; S.stats.picked++; }
+    S.pops.push({ x: m.x, y: m.y, text: full ? '满' : '+' + ELEM[k].name, t: 1.0, color: ELEM[k].color, full: full });
+    S.elFlash[k] = 0.5;
+  }
+}
+
+// ---------------------------------------------------------------- 合成
+
+function tryCraft(id) {
+  var f = FUSIONS[id];
+  if (S.channel) { toast('正在合成中…'); return; }
+  for (var k in f.combo) {
+    if ((S.elems[k] || 0) < f.combo[k]) { toast(f.name + '：' + ELEM[k].name + '不够'); return; }
+  }
+  for (var k2 in f.combo) S.elems[k2] -= f.combo[k2];
+  S.channel = { id: id, t: 0, dur: 1.2 };
+}
+
+// ---------------------------------------------------------------- 覆盖层
+
+function el(id) { return document.getElementById(id); }
+
+function showTitle() {
+  S.scene = 'title';
+  overlay.className = 'show';
+  overlay.innerHTML =
+    '<div class="card">' +
+      '<h1>守墙 · 三路</h1>' +
+      '<p>你不控制攻击。你只决定三件事：<b>合成什么</b>、<b>集火哪一路</b>、<b>带多少元素走</b>。</p>' +
+      '<p><b>1 / 2 / 3</b> 集火对应路线　<b>A</b> 自动　<b>Q</b> 照明弹（土+火）　<b>W</b> 焚风（火+风）　<b>E</b> 泥沼（水+土）　<b>空格</b> 暂停</p>' +
+      '<p class="dim">掉落：兵→火　影→土　生→风　疾→水。杀得越多，能合的越多。</p>' +
+      '<p class="dim">合成要吟唱 1.2 秒，期间不能开火。元素跨关保留，每类上限 4。城墙破了就结束。</p>' +
+      '<button class="btn" id="startBtn">开始</button>' +
+    '</div>';
+  el('startBtn').onclick = function () {
+    overlay.className = '';
+    overlay.innerHTML = '';
+    resetGame();
+    startLevel(0);
+  };
+}
+
+function showUpgrade() {
+  var pick = UPGRADES.filter(function (u) { return !(u.id === 'multi' && S.player.multi); });
+  var html = '<div class="card"><h2>过关 · 选一个</h2>' +
+             '<p class="dim">城墙修复 +15　当前 ' + Math.round(S.wall) + ' / ' + S.wallMax + '</p><div class="cards">';
+  for (var i = 0; i < pick.length; i++) {
+    html += '<div class="ucard" data-i="' + i + '"><b>' + pick[i].name + '</b><span>' + pick[i].desc + '</span></div>';
+  }
+  html += '</div></div>';
+  overlay.className = 'show';
+  overlay.innerHTML = html;
+  var cards = overlay.querySelectorAll('.ucard');
+  for (var j = 0; j < cards.length; j++) {
+    cards[j].onclick = function (e) {
+      var idx = parseInt(e.currentTarget.getAttribute('data-i'), 10);
+      pick[idx].apply(S.player);
+      startLevel(S.level + 1);
+    };
+  }
+}
+
+function statLines() {
+  var lines = [];
+  if (S.stats.weakened > 0) {
+    lines.push('幻影让 ' + S.stats.weakened + ' 支箭只打出三成伤害（共射出 ' + S.stats.shots + ' 支）');
+  }
+  if (S.stats.healed > 1) {
+    lines.push('再生怪一共回了 ' + Math.round(S.stats.healed) + ' 点血');
+  }
+  var parts = [];
+  for (var k in S.stats.reach) parts.push(TYPES[k].name + ' × ' + S.stats.reach[k]);
+  if (parts.length) lines.push('抵达城墙：' + parts.join('、'));
+  lines.push('击杀 ' + S.stats.kills + ' · 捡到元素 ' + S.stats.picked + ' · 操作 ' + S.stats.keys + ' 次');
+  return lines;
+}
+
+function showLose() {
+  var lines = statLines().map(function (s) { return '<div class="mono">· ' + s + '</div>'; }).join('');
+  overlay.className = 'show';
+  overlay.innerHTML =
+    '<div class="card"><h2>城墙破了</h2>' +
+      '<p class="dim">第 ' + (S.level + 1) + ' 关 · 撑到 ' + Math.round(S.t) + ' 秒</p>' +
+      lines +
+      '<p class="dim" style="margin-top:14px">提示：幻影靠照明弹实体化，再生靠焚风压住回复，疾行靠泥沼拖住。</p>' +
+      '<button class="btn" id="againBtn">再来一局</button></div>';
+  el('againBtn').onclick = function () { overlay.className = ''; overlay.innerHTML = ''; resetGame(); startLevel(0); };
+}
+
+function showWin() {
+  var lines = statLines().map(function (s) { return '<div class="mono">· ' + s + '</div>'; }).join('');
+  overlay.className = 'show';
+  overlay.innerHTML =
+    '<div class="card"><h2>守住了</h2>' +
+      '<p class="dim">五关全过 · 城墙剩余 ' + Math.round(S.wall) + '</p>' +
+      lines +
+      '<button class="btn" id="againBtn2">再来一局</button></div>';
+  el('againBtn2').onclick = function () { overlay.className = ''; overlay.innerHTML = ''; resetGame(); startLevel(0); };
+}
+
+// ---------------------------------------------------------------- 绘制
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function draw() {
+  if (!S) return;
+  var i, k;
+
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#0c1420');
+  bg.addColorStop(1, '#080d14');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 三路地面
+  for (i = 0; i < 3; i++) {
+    var lg = ctx.createLinearGradient(0, SPAWN_Y, 0, WALL_TOP);
+    lg.addColorStop(0, 'rgba(120,160,200,0.02)');
+    lg.addColorStop(1, 'rgba(120,160,200,0.075)');
+    ctx.fillStyle = lg;
+    ctx.fillRect(LANES[i] - 95, SPAWN_Y - 6, 190, WALL_TOP - SPAWN_Y + 6);
+  }
+  if (S.focus != null) {
+    ctx.fillStyle = 'rgba(226,193,74,0.055)';
+    ctx.fillRect(LANES[S.focus] - 95, SPAWN_Y - 6, 190, WALL_TOP - SPAWN_Y + 6);
+  }
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+  ctx.lineWidth = 1;
+  var seps = [105, 295, 385, 575, 665, 855];
+  for (i = 0; i < seps.length; i++) {
+    ctx.beginPath();
+    ctx.moveTo(seps[i], SPAWN_Y - 6);
+    ctx.lineTo(seps[i], WALL_TOP);
+    ctx.stroke();
+  }
+
+  // 特效染色
+  var fxColor = null, fxName = '';
+  if (S.fx.light > 0) { fxColor = 'rgba(255,224,138,0.15)'; fxName = '照明弹'; }
+  else if (S.fx.scorch > 0) { fxColor = 'rgba(255,107,61,0.15)'; fxName = '焚风'; }
+  else if (S.fx.mud > 0) { fxColor = 'rgba(150,115,70,0.17)'; fxName = '泥沼'; }
+  if (fxColor) {
+    ctx.fillStyle = fxColor;
+    ctx.fillRect(0, SPAWN_Y - 6, W, WALL_TOP - SPAWN_Y + 6);
+    ctx.fillStyle = fxColor.replace(/0\.\d+\)/, '0.85)');
+    ctx.fillRect(0, 74, W, 2);
+  }
+
+  // 城墙
+  var pct = Math.max(0, S.wall / S.wallMax);
+  var hpColor = pct > 0.5 ? '#4fbf72' : (pct > 0.25 ? '#d9b13f' : '#d4553a');
+  ctx.fillStyle = '#111a26';
+  ctx.fillRect(0, WALL_TOP, W, WALL_H);
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, WALL_TOP, W, WALL_H); ctx.clip();
+  ctx.fillStyle = hpColor;
+  ctx.globalAlpha = 0.34;
+  ctx.fillRect(0, WALL_TOP, W * pct, WALL_H);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+  ctx.lineWidth = 1;
+  var yy, xx;
+  for (yy = WALL_TOP + 14; yy < WALL_TOP + WALL_H; yy += 14) {
+    ctx.beginPath(); ctx.moveTo(0, yy + 0.5); ctx.lineTo(W, yy + 0.5); ctx.stroke();
+  }
+  for (xx = 0; xx < W; xx += 52) {
+    ctx.beginPath(); ctx.moveTo(xx + 0.5, WALL_TOP); ctx.lineTo(xx + 0.5, WALL_TOP + WALL_H); ctx.stroke();
+  }
+  ctx.fillStyle = hpColor;
+  ctx.fillRect(0, WALL_TOP + WALL_H - 5, W * pct, 5);
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.beginPath(); ctx.moveTo(0, WALL_TOP + 0.5); ctx.lineTo(W, WALL_TOP + 0.5); ctx.stroke();
+
+  ctx.font = 'bold 16px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var wallTxt = '城墙  ' + Math.ceil(S.wall) + ' / ' + S.wallMax;
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(6,10,16,0.9)';
+  ctx.strokeText(wallTxt, W / 2, WALL_TOP + WALL_H / 2 - 2);
+  ctx.fillStyle = '#e8eef7';
+  ctx.fillText(wallTxt, W / 2, WALL_TOP + WALL_H / 2 - 2);
+
+  // 路线编号徽标
+  for (i = 0; i < 3; i++) {
+    var on = S.focus === i;
+    ctx.beginPath();
+    ctx.arc(LANES[i], 85, 11, 0, Math.PI * 2);
+    ctx.fillStyle = on ? 'rgba(226,193,74,0.20)' : 'rgba(255,255,255,0.05)';
+    ctx.fill();
+    ctx.fillStyle = on ? '#e2c14a' : 'rgba(255,255,255,0.35)';
+    ctx.font = 'bold 12px ui-monospace,Menlo,monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(i + 1), LANES[i], 86);
+  }
+  if (S.focus != null) {
+    ctx.beginPath();
+    ctx.moveTo(LANES[S.focus] - 9, WALL_TOP - 8);
+    ctx.lineTo(LANES[S.focus] + 9, WALL_TOP - 8);
+    ctx.lineTo(LANES[S.focus], WALL_TOP);
+    ctx.closePath();
+    ctx.fillStyle = '#e2c14a';
+    ctx.fill();
+  }
+
+  // 怪物
+  for (i = 0; i < S.monsters.length; i++) {
+    var m = S.monsters[i], T = TYPES[m.type];
+    var flick = (m.type === 'phantom' && S.fx.light <= 0)
+      ? 0.35 + 0.35 * Math.abs(Math.sin(S.t * 6 + m.id))
+      : 1;
+    ctx.globalAlpha = flick;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, T.r, 0, Math.PI * 2);
+    ctx.fillStyle = m.hurt > 0 ? '#ffffff' : T.color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = 'rgba(10,14,20,0.8)';
+    ctx.font = 'bold 13px -apple-system,"PingFang SC",sans-serif';
+    ctx.fillText(T.ch, m.x, m.y + 1);
+
+    if (m.hp < m.max) {
+      var w2 = T.r * 2;
+      ctx.fillStyle = 'rgba(6,10,16,0.8)';
+      ctx.fillRect(m.x - w2 / 2 - 1, m.y - T.r - 10, w2 + 2, 6);
+      ctx.fillStyle = '#ff9c6e';
+      ctx.fillRect(m.x - w2 / 2, m.y - T.r - 9, w2 * Math.max(0, m.hp / m.max), 4);
+    }
+  }
+
+  // 撞击涟漪
+  for (i = 0; i < S.impacts.length; i++) {
+    var im = S.impacts[i];
+    var k2 = 1 - im.t / 0.45;
+    ctx.beginPath();
+    ctx.arc(im.x, WALL_TOP + 6, 10 + k2 * 34, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(224,80,60,' + (1 - k2) * 0.75 + ')';
+    ctx.lineWidth = 3 * (1 - k2) + 1;
+    ctx.stroke();
+  }
+
+  // 掉落飘字
+  for (i = 0; i < S.pops.length; i++) {
+    var pp = S.pops[i];
+    ctx.globalAlpha = Math.max(0, Math.min(1, pp.t / 0.6));
+    ctx.fillStyle = pp.full ? '#6b7686' : pp.color;
+    ctx.font = 'bold 14px -apple-system,"PingFang SC",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pp.text, pp.x, pp.y - 8);
+    if (!pp.full) {
+      ctx.beginPath();
+      ctx.arc(pp.x, pp.y + 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 箭矢
+  ctx.save();
+  for (i = 0; i < S.shots.length; i++) {
+    var s = S.shots[i];
+    var col = s.charged ? '#ffe08a' : '#bfe0ff';
+    ctx.shadowColor = col;
+    ctx.shadowBlur = s.charged ? 14 : 8;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = s.charged ? 3.5 : 2.4;
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(s.x - s.vx * 0.024, s.y - s.vy * 0.024);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 炮台
+  ctx.beginPath();
+  ctx.arc(TURRET.x, TURRET.y + 8, 22, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fill();
+  ctx.save();
+  ctx.translate(TURRET.x, TURRET.y);
+  ctx.rotate(S.aim);
+  ctx.fillStyle = '#7f93ad';
+  ctx.fillRect(-4, -30, 8, 30);
+  ctx.fillStyle = '#a9bcd4';
+  ctx.fillRect(-2, -30, 4, 12);
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(TURRET.x, TURRET.y, 18, 0, Math.PI * 2);
+  ctx.fillStyle = '#33445b';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(TURRET.x, TURRET.y, 6, 0, Math.PI * 2);
+  ctx.fillStyle = '#9fb3ca';
+  ctx.fill();
+
+  // 吟唱环
+  if (S.channel) {
+    var c = S.channel, pr = c.t / c.dur;
+    ctx.beginPath();
+    ctx.arc(TURRET.x, TURRET.y, 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pr);
+    ctx.strokeStyle = FUSIONS[c.id].color;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  // 顶部 HUD
+  ctx.fillStyle = 'rgba(9,14,21,0.9)';
+  ctx.fillRect(0, 0, W, 74);
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.beginPath(); ctx.moveTo(0, 74.5); ctx.lineTo(W, 74.5); ctx.stroke();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e8eef7';
+  ctx.font = 'bold 17px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillText('第 ' + (S.level + 1) + ' / ' + LEVELS.length + ' 关', 26, 26);
+  ctx.fillStyle = '#7d8ca3';
+  ctx.font = '13px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillText('集火：' + (S.focus == null ? '自动' : '第 ' + (S.focus + 1) + ' 路'), 26, 50);
+
+  // 元素
+  var ex = W - 26;
+  for (i = ELEM_KEYS.length - 1; i >= 0; i--) {
+    var key = ELEM_KEYS[i];
+    var n = S.elems[key] || 0;
+    ex -= 62;
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    roundRect(ex, 20, 54, 34, 9); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ex + 15, 37, 8, 0, Math.PI * 2);
+    ctx.fillStyle = ELEM[key].color;
+    ctx.globalAlpha = n > 0 ? 1 : 0.25;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = n > 0 ? '#e8eef7' : '#4e5a6b';
+    ctx.font = 'bold 15px ui-monospace,Menlo,monospace';
+    ctx.fillText('×' + n, ex + 29, 38);
+  }
+
+  // 合成提示（键位 + 配方色点 + 名称）
+  var cx = 216;
+  var order = ['light', 'scorch', 'mud'];
+  for (i = 0; i < order.length; i++) {
+    var f = FUSIONS[order[i]];
+    var ok = true;
+    for (k in f.combo) if ((S.elems[k] || 0) < f.combo[k]) ok = false;
+    ctx.fillStyle = ok ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.022)';
+    roundRect(cx, 20, 96, 34, 9); ctx.fill();
+    if (ok) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ok ? f.color : '#45505f';
+    ctx.font = 'bold 12px ui-monospace,Menlo,monospace';
+    ctx.fillText(f.key, cx + 9, 38);
+    var dotX = cx + 25;
+    var first = true;
+    for (k in f.combo) {
+      if (!first) {
+        ctx.fillStyle = ok ? 'rgba(255,255,255,0.45)' : '#333d4b';
+        ctx.font = 'bold 10px ui-monospace,Menlo,monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('+', dotX - 6, 38);
+        ctx.textAlign = 'left';
+      }
+      ctx.beginPath();
+      ctx.arc(dotX, 38, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = ok ? ELEM[k].color : '#2c3644';
+      ctx.fill();
+      dotX += 15;
+      first = false;
+    }
+    ctx.fillStyle = ok ? '#d6dfea' : '#45505f';
+    ctx.font = '11px -apple-system,"PingFang SC",sans-serif';
+    ctx.fillText(f.name, cx + 56, 38);
+    cx += 102;
+  }
+
+  // 特效倒计时
+  if (fxName) {
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    roundRect(150, 20, 56, 34, 9); ctx.fill();
+    ctx.fillStyle = fxColor.replace('0.10', '1').replace('0.12', '1');
+    ctx.font = 'bold 13px -apple-system,"PingFang SC",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.ceil(Math.max(S.fx.light, S.fx.scorch, S.fx.mud)) + 's', 178, 38);
+  }
+
+  // 提示条
+  if (S.toast) {
+    var a = Math.min(1, S.toast.t / 0.5);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(9,14,21,0.92)';
+    roundRect(W / 2 - 250, H / 2 - 26, 500, 52, 12); ctx.fill();
+    ctx.fillStyle = '#e8eef7';
+    ctx.font = '15px -apple-system,"PingFang SC",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(S.toast.text, W / 2, H / 2);
+    ctx.globalAlpha = 1;
+  }
+
+  // 暂停
+  if (S.paused && S.scene === 'play') {
+    ctx.fillStyle = 'rgba(7,10,16,0.65)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#e8eef7';
+    ctx.font = 'bold 26px -apple-system,"PingFang SC",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('暂停', W / 2, H / 2);
+  }
+
+  // 开发视角：操作 / 击杀
+  if (S.showDev) {
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#7d8ca3';
+    ctx.font = '12px ui-monospace,Menlo,monospace';
+    var ratio = S.stats.kills ? (S.stats.keys / S.stats.kills).toFixed(2) : '—';
+    ctx.fillText('操作 ' + S.stats.keys + ' · 击杀 ' + S.stats.kills + ' · 比 ' + ratio, W - 22, 612);
+  }
+
+  // 底部操作提示
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.font = '12px -apple-system,"PingFang SC",sans-serif';
+  ctx.fillText('1 / 2 / 3 集火　A 自动　Q W E 合成　空格 暂停　H 数据', 22, 612);
+}
+
+// ---------------------------------------------------------------- 输入
+
+window.addEventListener('keydown', function (e) {
+  if (!S) return;
+  var k = e.key.toLowerCase();
+  if (k === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    if (S.scene === 'play') S.paused = !S.paused;
+    return;
+  }
+  if (S.scene !== 'play' || S.paused) return;
+  if (k === '1' || k === '2' || k === '3') { S.focus = parseInt(k, 10) - 1; S.stats.keys++; }
+  else if (k === 'a') { S.focus = null; S.stats.keys++; }
+  else if (k === 'q') { tryCraft('light'); S.stats.keys++; }
+  else if (k === 'w') { tryCraft('scorch'); S.stats.keys++; }
+  else if (k === 'e') { tryCraft('mud'); S.stats.keys++; }
+  else if (k === 'h') { S.showDev = !S.showDev; }
+});
+
+// ---------------------------------------------------------------- 启动
+
+var lastTs = 0;
+function frame(ts) {
+  var dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.06) : 0.016;
+  lastTs = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+resetGame();
+showTitle();
+
+// ?autostart=1&level=0&ff=6 —— 调试/截图用：直接开局并快进 N 秒
+(function () {
+  var qs = (typeof location !== 'undefined' && location.search) ? location.search : '';
+  if (qs.indexOf('autostart') < 0) return;
+  var lv = /level=(\d+)/.exec(qs);
+  resetGame();
+  var wl = /wall=(\d+)/.exec(qs);
+  if (wl) S.wall = parseInt(wl[1], 10);
+  startLevel(lv ? parseInt(lv[1], 10) : 0);
+  var ff = /ff=(\d+)/.exec(qs);
+  if (ff) {
+    var n = parseInt(ff[1], 10) * 60;
+    for (var i = 0; i < n; i++) update(1 / 60);
+  }
+  var dbgFx = /fx=(light|scorch|mud)/.exec(qs);
+  if (dbgFx) S.fx[dbgFx[1]] = 99;
+  var dbgCraft = /craft=(light|scorch|mud)/.exec(qs);
+  if (dbgCraft) S.channel = { id: dbgCraft[1], t: 0.55, dur: 1.2 };
+})();
+
+requestAnimationFrame(frame);
+
+// 供自动化测试使用
+window.__CG = {
+  getState: function () { return S; },
+  update: update,
+  draw: draw,
+  startLevel: startLevel,
+  resetGame: resetGame,
+  tryCraft: tryCraft,
+  setFocus: function (l) { S.focus = l; },
+  levelClear: levelClear,
+  upgrades: UPGRADES,
+  applyUpgrade: function (id) {
+    for (var i = 0; i < UPGRADES.length; i++) if (UPGRADES[i].id === id) UPGRADES[i].apply(S.player);
+  }
+};
+})();
+</script>
+</body>
+</html>

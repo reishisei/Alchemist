@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>炼金法师 · 原型集</title>
+<style>
+  :root{
+    --bg:#0a0f16; --panel:#111a26; --line:#1e2b3b;
+    --ink:#e8eef7; --muted:#7d8ca3; --gold:#e2c14a; --teal:#5ad2b0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    display:flex;justify-content:center;padding:64px 24px;}
+  .wrap{width:900px;}
+  .kicker{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.28em;
+    color:var(--teal);margin-bottom:14px;}
+  h1{font-size:34px;margin:0 0 14px;letter-spacing:.02em;}
+  .lede{color:var(--muted);font-size:14.5px;line-height:1.9;max-width:640px;margin:0 0 40px;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .card{display:block;text-decoration:none;color:inherit;background:var(--panel);
+    border:1px solid var(--line);border-radius:16px;padding:22px 22px 20px;
+    transition:.16s;}
+  .card:hover{transform:translateY(-3px);border-color:rgba(226,193,74,.5);
+    box-shadow:0 18px 40px -20px rgba(0,0,0,.9);}
+  .card h2{font-size:18px;margin:0 0 8px;display:flex;align-items:center;gap:10px;}
+  .card p{color:var(--muted);font-size:13px;line-height:1.75;margin:0 0 14px;}
+  .tag{font-size:10px;padding:3px 9px;border-radius:99px;letter-spacing:.1em;font-weight:400;}
+  .ok{background:rgba(90,210,176,.13);color:var(--teal);}
+  .wip{background:rgba(226,193,74,.13);color:var(--gold);}
+  .meta{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#41505f;}
+  .wide{grid-column:1 / -1;}
+  .wide h2{font-size:16px;color:var(--gold);}
+  .wide:hover{border-color:var(--gold);}
+  footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+    color:#41505f;font-size:12px;line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">ALCHEMIST · PROTOTYPES</div>
+  <h1>炼金法师</h1>
+  <p class="lede">
+    一个「合成 → 成长 → 战斗」的原型集。<b>没有构建、没有依赖、没有服务器</b>，双击就能玩。
+    完整设计在文档里，两个 demo 分别是它的两半。
+  </p>
+
+  <div class="grid">
+    <a class="card" href="alchemy/index.html">
+      <h2>炼金台 <span class="tag ok">可玩</span></h2>
+      <p>22 种元素、19 条配方。两两合成，熟练度攒满才掌握，掌握的元素会常驻材料池。</p>
+      <div class="meta">合成层 · 元素树 v3</div>
+    </a>
+
+    <a class="card" href="castle-guard/index.html">
+      <h2>守墙三路 <span class="tag ok">可玩</span></h2>
+      <p>你不管攻击，只管集火哪一路、用哪个技能。5 关，怪撞墙即破，血归零结束。</p>
+      <div class="meta">战斗层 · 5 关</div>
+    </a>
+
+    <a class="card wide" href="游戏设计文档.md">
+      <h2>游戏设计文档 →</h2>
+      <p>核心循环、元素树、选系与阶级、技能槽、十条禁咒、经济、待决策、验收标准。</p>
+      <div class="meta">交接用 · 自包含 · 310 行</div>
+    </a>
+  </div>
+
+  <footer>
+    设计上唯一不能丢的两条：<br>
+    · 不写「禁止」，写「诱惑」——本系免费但只能练到 50%，想突破就得买外系元素。<br>
+    · 讨厌的是赌博，不是难度——任何"随机决定成败"的地方都要有保底。
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>炼金台 · 元素树</title>
+<style>
+  :root{
+    --bg:#0a0f16; --panel:#111a26; --line:#1e2b3b;
+    --ink:#e8eef7; --muted:#7d8ca3; --gold:#e2c14a; --teal:#5ad2b0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;}
+  body{display:flex;justify-content:center;padding:26px 20px 48px;}
+  .app{width:1060px;}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;}
+  h1{font-size:23px;margin:0;letter-spacing:.06em;font-weight:700;}
+  h1 span{color:var(--muted);font-size:12px;font-weight:400;letter-spacing:.14em;margin-left:10px;}
+  .head-right{display:flex;align-items:center;gap:16px;}
+  .rank{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .rank .badge{padding:4px 13px;border-radius:99px;border:1px solid rgba(226,193,74,.45);
+    color:var(--gold);font-size:12px;letter-spacing:.1em;}
+  .rank .prog{color:#4a5b6e;font-size:11.5px;}
+  .counts{font-size:12.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;}
+  .counts b{color:var(--ink);}
+  .reset{background:none;border:none;color:#41505f;font-size:12px;cursor:pointer;padding:4px 6px;}
+  .reset:hover{color:#e0603c;}
+
+  .mod{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin-bottom:14px;}
+  .mod-title{font-size:11.5px;letter-spacing:.18em;color:var(--muted);margin-bottom:12px;
+    display:flex;align-items:center;gap:10px;}
+  .mod-title i{font-style:normal;color:var(--gold);font-weight:700;letter-spacing:0;}
+  .mod-title .hint{letter-spacing:.02em;color:#3f5063;margin-left:4px;}
+  .cap{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#4a5b6e;}
+
+  .ware{display:flex;flex-wrap:wrap;gap:9px;min-height:52px;align-content:flex-start;}
+  .wchip{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;user-select:none;border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.03);transition:.12s;position:relative;font-size:17px;font-weight:700;}
+  .wchip:hover{transform:translateY(-2px);}
+  .wchip.sel{box-shadow:0 0 0 2px var(--gold),0 8px 24px -8px rgba(226,193,74,.55) !important;}
+  .wchip.fresh{animation:pop .55s ease;}
+  @keyframes pop{0%{transform:scale(.4);opacity:.2}55%{transform:scale(1.22)}100%{transform:scale(1)}}
+  .wchip.locked{opacity:.4;cursor:not-allowed;}
+  .wchip.locked::after{content:'';position:absolute;inset:0;border-radius:50%;
+    background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.25) 4px 8px);}
+  .wchip .lk{position:absolute;right:-2px;bottom:-2px;font-size:9px;color:#c9873f;}
+  .ware-empty{color:#3d4c60;font-size:12px;padding:14px 0;}
+  .mast{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:#4a5b6e;}
+  .mtag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;
+    background:rgba(255,255,255,.04);color:#93a3b6;font-size:11px;}
+  .mtag i{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .mtag em{font-style:normal;font-size:9.5px;color:#6b7a8d;}
+
+  .hand-row{display:flex;align-items:center;gap:14px;}
+  .reroll{height:42px;padding:0 18px;border-radius:11px;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);color:var(--ink);cursor:pointer;font-size:13.5px;}
+  .reroll:hover{border-color:var(--teal);color:var(--teal);}
+
+  .cols{display:grid;grid-template-columns:1fr 1.05fr;gap:14px;}
+  .cols .mod{margin-bottom:0;}
+
+  .bench{display:flex;align-items:center;justify-content:center;gap:16px;padding:6px 0 4px;}
+  .bench.shake{animation:shake .36s ease;}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
+  .slot{width:78px;height:78px;border-radius:50%;border:1.5px dashed #2a3a4f;
+    display:flex;align-items:center;justify-content:center;color:#33455c;font-size:24px;
+    cursor:pointer;transition:.15s;}
+  .slot.filled{border-style:solid;border-color:transparent;}
+  .slot .ch{font-size:24px;font-weight:700;}
+  .plus{color:#33455c;font-size:18px;}
+
+  .actions{display:flex;gap:10px;margin-top:6px;}
+  .actions button{flex:1;height:50px;border-radius:12px;border:1px solid var(--line);
+    background:rgba(255,255,255,.04);color:var(--ink);cursor:pointer;font-size:14.5px;
+    letter-spacing:.05em;transition:.15s;}
+  .actions button:disabled{opacity:.4;cursor:not-allowed;}
+  .actions button:hover:not(:disabled){border-color:#6fb3ff;color:#9fd0ff;}
+  .actions button .odds{display:block;font-size:10.5px;color:var(--muted);margin-top:2px;
+    font-family:ui-monospace,Menlo,monospace;}
+
+  .pairhint{margin-top:8px;font-size:12px;color:#6b7a8d;text-align:center;min-height:18px;}
+  .pairhint.bad{color:#c9873f;}
+  .pairhint.good{color:var(--teal);}
+  .msg{margin-top:4px;min-height:20px;font-size:13px;color:var(--muted);text-align:center;}
+  .msg.ok{color:var(--teal);}
+  .msg.bad{color:#e0603c;}
+  .msg.info{color:var(--gold);}
+
+  .log{max-height:300px;overflow:auto;padding-right:4px;}
+  .log-empty{color:#3d4c60;font-size:12.5px;text-align:center;padding:52px 0;}
+  .entry{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:10px;
+    background:rgba(255,255,255,.025);margin-bottom:7px;animation:in .3s ease;}
+  @keyframes in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .entry .dot{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-size:12px;font-weight:700;flex:none;}
+  .entry .body{flex:1;min-width:0;}
+  .entry .name{font-size:13.5px;}
+  .entry .from{font-size:10.5px;color:var(--muted);margin-top:1px;font-family:ui-monospace,Menlo,monospace;}
+  .entry .tag{font-size:9.5px;padding:2px 7px;border-radius:99px;letter-spacing:.1em;flex:none;}
+  .tag.el{background:rgba(111,179,255,.14);color:#8fc4ff;}
+  .tag.re{background:rgba(90,210,176,.14);color:var(--teal);}
+
+  .codex{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .tier h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;color:#3f5063;font-weight:400;}
+  .tier .row{display:flex;flex-wrap:wrap;gap:6px;}
+  .cx{display:flex;align-items:center;gap:5px;padding:4px 9px 4px 5px;border-radius:99px;
+    background:rgba(255,255,255,.035);font-size:11.5px;color:#93a3b6;}
+  .cx i{width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;
+    justify-content:center;font-size:9px;font-weight:700;font-style:normal;}
+  .cx.unknown{opacity:.35;color:#4a5b6e;}
+  .cx.unknown i{background:#1c2836 !important;color:#3d4c60;}
+
+  .toast{position:fixed;left:50%;top:36px;transform:translateX(-50%);padding:11px 24px;
+    border-radius:12px;background:#152233;border:1px solid #2a3b52;font-size:14px;
+    opacity:0;pointer-events:none;transition:.3s;box-shadow:0 20px 50px -12px #000;z-index:9;}
+  .toast.show{opacity:1;top:46px;}
+  .toast.new{color:var(--gold);border-color:rgba(226,193,74,.5);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>炼金台<span>ELEMENT TREE</span></h1>
+    <div class="head-right">
+      <div class="rank"><span class="badge" id="rank">见习魔法师</span><span class="prog" id="rankProg"></span></div>
+      <div class="counts">已发现元素 <b id="cEl">4</b>/<span id="cAll">22</span></div>
+      <button class="reset" id="reset">重置</button>
+    </div>
+  </header>
+
+  <section class="mod">
+    <div class="mod-title"><i>一</i> 材料仓库　<span class="hint">点两个放上炼金台 · 右键丢弃</span>
+      <span class="cap" id="cap">0/24</span></div>
+    <div class="ware" id="ware"></div>
+    <div class="hand-row" style="margin-top:12px">
+      <button class="reroll" id="reroll">刷新 +4</button>
+      <div class="mast" id="masteredList"></div>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="mod">
+      <div class="mod-title"><i>二</i> 炼金台</div>
+      <div class="bench">
+        <div class="slot" id="slot0">+</div>
+        <div class="plus">+</div>
+        <div class="slot" id="slot1">+</div>
+      </div>
+      <div class="actions">
+        <button id="btnElem" disabled>合成元素<span class="odds" id="oddsE">—</span></button>
+      </div>
+      <div class="pairhint" id="pairHint">选两个材料放上台子</div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="mod">
+      <div class="mod-title"><i>三</i> 合成列表</div>
+      <div class="log" id="log"><div class="log-empty">还没有记录</div></div>
+    </section>
+  </div>
+
+  <section class="mod" style="margin-top:14px">
+    <div class="mod-title"><i>四</i> 元素图鉴　<span class="hint">??? 是还没撞出来的</span></div>
+    <div class="codex" id="codex"></div>
+  </section>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// ---------------------------------------------------------------- 元素表
+// tier 0 = 基础；1 = 基础两两；2 = 一级+基础；3 = 一级+一级
+var ELEMS = {
+  fire:    { name:'火',   ch:'火', c:'#ff7a45', tier:0 },
+  water:   { name:'水',   ch:'水', c:'#4aa3ff', tier:0 },
+  wind:    { name:'风',   ch:'风', c:'#5ad2b0', tier:0 },
+  earth:   { name:'土',   ch:'土', c:'#d4a72c', tier:0 },
+
+  thunder: { name:'电',   ch:'电', c:'#ffe14a', tier:1 },
+  blast:   { name:'爆',   ch:'爆', c:'#ff6b3d', tier:1 },
+  metal:   { name:'金属', ch:'金', c:'#b9c3cf', tier:1 },
+  ice:     { name:'冰',   ch:'冰', c:'#8fdcff', tier:1 },
+  poison:  { name:'毒',   ch:'毒', c:'#7ed957', tier:1 },
+  sand:    { name:'沙',   ch:'沙', c:'#e0c48a', tier:1 },
+
+  glass:   { name:'玻璃', ch:'璃', c:'#9fe8d8', tier:2 },
+  mud:     { name:'泥',   ch:'泥', c:'#9c7f5b', tier:2 },
+  molten:  { name:'熔金', ch:'熔', c:'#ffa04d', tier:2 },
+  rust:    { name:'锈',   ch:'锈', c:'#c06b3e', tier:2 },
+  smoke:   { name:'烟',   ch:'烟', c:'#8d97a3', tier:2 },
+  magnet:  { name:'磁',   ch:'磁', c:'#b06bd6', tier:2 },
+  vapor:   { name:'汽',   ch:'汽', c:'#cfd8e4', tier:2 },
+
+  frost:   { name:'霜雷', ch:'霖', c:'#a8e0ff', tier:3 },
+  magstorm:{ name:'磁暴', ch:'霎', c:'#c78bff', tier:3 },
+  acidsteel:{name:'蚀钢', ch:'蚀', c:'#a5d94a', tier:3 },
+  ironsand:{ name:'砂铁', ch:'砂', c:'#cbb08a', tier:3 },
+  frostblast:{name:'霜爆',ch:'霰', c:'#ffd6c2', tier:3 }
+};
+var BASE = ['fire','water','earth','wind'];
+
+var WARE_CAP   = 24;
+var REFRESH_N  = 4;
+var MAST_START = 50;
+var MAST_GAIN  = 25;
+var MAST_ON_FAIL = 4;   // 失败也给一点熟练度。0 = 严格按「成功才涨」；改成 4 能明显压住运气波动
+var REDUCE_RATE = 75;   // 还原类配方的成功率
+
+// ---------------------------------------------------------------- 配方表
+// 加配方就在这里加一行：'a+b': { element:'产物id' }
+//   · 键必须按字母序（a < b），例：'earth+water'
+//   · 产物 id 必须是 ELEMS 里已有的
+//   · 加 reduce:true 表示"还原"（产出基础元素，不算新发现）
+var RECIPES = {
+  // —— 一级：基础 × 基础 ——
+  'fire+water':   { element:'thunder' },   // 水火 → 电
+  'fire+wind':    { element:'blast'   },   // 火风 → 爆
+  'earth+fire':   { element:'metal'   },   // 火土 → 金属
+  'water+wind':   { element:'ice'     },   // 水风 → 冰
+  'earth+water':  { element:'poison'  },   // 水土 → 毒
+  'earth+wind':   { element:'sand'    },   // 风土 → 沙
+
+  // —— 二级：一级 × 基础 ——
+  'fire+ice':     { element:'water', reduce:true },  // 火 + 冰 → 水（还原）
+  'fire+sand':    { element:'glass'   },   // 火 + 沙 → 玻璃
+  'sand+water':   { element:'mud'     },   // 水 + 沙 → 泥
+  'fire+metal':   { element:'molten'  },   // 火 + 金属 → 熔金
+  'metal+water':  { element:'rust'    },   // 水 + 金属 → 锈
+  'fire+poison':  { element:'smoke'   },   // 火 + 毒 → 烟
+  'earth+thunder':{ element:'magnet'  },   // 土 + 电 → 磁
+  'thunder+water':{ element:'vapor'   },   // 水 + 电 → 汽
+
+  // —— 三级：一级 × 一级 ——
+  'ice+thunder':  { element:'frost'   },   // 电 + 冰 → 霜雷
+  'metal+thunder':{ element:'magstorm'},   // 电 + 金属 → 磁暴
+  'metal+poison': { element:'acidsteel'},  // 毒 + 金属 → 蚀钢
+  'metal+sand':   { element:'ironsand'},   // 沙 + 金属 → 砂铁
+  'blast+ice':    { element:'frostblast'}  // 爆 + 冰 → 霜爆
+};
+
+var ALL_ELEMS = Object.keys(ELEMS).length;
+
+// ---------------------------------------------------------------- 阶级
+// 阶级决定随机池里能抽到第几级元素（合成本身不受限）
+var RANKS = [
+  { name:'见习魔法师', min:0, matTier:0 },   // 只能抽基础
+  { name:'中级魔法师', min:3, matTier:1 },   // 能抽一级
+  { name:'高级魔法师', min:7, matTier:3 }    // 能抽二级三级
+];
+
+// 只数"新发现"的，基础四元素不算
+function discovered(){
+  var n = 0;
+  S.known.forEach(function(id){ if (ELEMS[id].tier > 0) n++; });
+  return n;
+}
+function rankOf(){
+  var r = RANKS[0], d = discovered();
+  for (var i = 0; i < RANKS.length; i++) if (d >= RANKS[i].min) r = RANKS[i];
+  return r;
+}
+function nextRank(){
+  var d = discovered();
+  for (var i = 0; i < RANKS.length; i++) if (d < RANKS[i].min) return RANKS[i];
+  return null;
+}
+function isLocked(id){ return ELEMS[id].tier > rankOf().matTier; }
+
+// ---------------------------------------------------------------- 状态
+function fresh(){
+  return { known: BASE.slice(), mast:{}, mastered:[], log:[], ware:[], slots:[null,null], _rank:null };
+}
+var S = fresh();
+var freshIdx = -1, freshTimer = null;
+var $ = function(id){ return document.getElementById(id); };
+
+function flashNew(i){
+  freshIdx = i;
+  if (freshTimer) clearTimeout(freshTimer);
+  freshTimer = setTimeout(function(){ freshIdx = -1; render(); }, 1400);
+}
+
+// ---------------------------------------------------------------- 抽牌
+function poolIds(){
+  var out = [];
+  BASE.forEach(function(id){ for (var i = 0; i < 8; i++) out.push(id); });
+  var mt = rankOf().matTier;
+  S.mastered.forEach(function(id){
+    if (ELEMS[id].tier > mt) return;
+    for (var i = 0; i < 5; i++) out.push(id);
+  });
+  return out;
+}
+
+function refresh(){
+  var room = WARE_CAP - S.ware.length;
+  if (room <= 0) return say('仓库满了（' + WARE_CAP + '）—— 右键丢一个，或先合成', 'bad');
+  var n = Math.min(REFRESH_N, room);
+  var pool = poolIds();
+  for (var i = 0; i < n; i++) S.ware.push(pool[Math.floor(Math.random() * pool.length)]);
+  S.slots = [null, null];
+  render();
+  say('入库 ' + n + ' 个材料', '');
+}
+
+// ---------------------------------------------------------------- 判定
+function mastOf(id){ return (S.mast[id] == null) ? MAST_START : S.mast[id]; }
+
+function pairOf(){
+  if (S.slots[0] == null || S.slots[1] == null) return null;
+  var a = S.ware[S.slots[0]], b = S.ware[S.slots[1]];
+  if (a == null || b == null) return null;
+  var r = RECIPES[a < b ? a + '+' + b : b + '+' + a];
+  return r ? { a:a, b:b, r:r } : null;
+}
+
+function can(){
+  var p = pairOf();
+  return !!(p && p.r.element);
+}
+
+function rateOf(p){
+  if (p.r.reduce) return REDUCE_RATE;
+  return mastOf(p.r.element);
+}
+
+// ---------------------------------------------------------------- 合成
+function consumeTwo(){
+  var i = S.slots[0], j = S.slots[1];
+  var hi = Math.max(i, j), lo = Math.min(i, j);
+  S.ware.splice(hi, 1);
+  S.ware.splice(lo, 1);
+  S.slots = [null, null];
+  return lo;
+}
+
+function attempt(){
+  if (!can()) return;
+  var p = pairOf();
+  var a = p.a, b = p.b, r = p.r;
+  var target = r.element;
+  var m = rateOf(p);
+
+  if (m < 100 && Math.random() * 100 >= m){
+    if (MAST_ON_FAIL > 0 && !r.reduce && !isLocked(target)){
+      S.mast[target] = Math.min(99, mastOf(target) + MAST_ON_FAIL);
+    }
+    consumeTwo();
+    render();
+    shake();
+    return say('失败 · 材料 -2　' + (r.reduce ? '还原成功率 ' : '熟练度 ') + (r.reduce ? m : mastOf(target)) + '%', 'bad');
+  }
+
+  var at = consumeTwo();
+  S.ware.splice(at, 0, target);
+  flashNew(at);
+
+  if (r.reduce){
+    S.log.unshift({ type:'reduce', id:target, from:[a,b] });
+    toast('还原 · 变回' + ELEMS[target].name, false);
+    say('还原成「' + ELEMS[target].name + '」', 'ok');
+    render();
+    return;
+  }
+
+  var nm = Math.min(100, mastOf(target) + MAST_GAIN);
+  S.mast[target] = nm;
+  if (S.known.indexOf(target) < 0) S.known.push(target);
+  if (nm >= 100 && S.mastered.indexOf(target) < 0){
+    S.mastered.push(target);
+    toast('掌握 · ' + ELEMS[target].name + ' 常驻材料池', true);
+  } else {
+    toast('炼成 · ' + ELEMS[target].name + '（' + nm + '%）', true);
+  }
+  S.log.unshift({ type:'element', id:target, from:[a,b], mast:nm });
+
+  var lockNote = isLocked(target) ? '（' + rankOf().name + '用不了，先囤着）' : '';
+  say('炼成「' + ELEMS[target].name + '」· 材料 -2　熟练度 ' + (nm - MAST_GAIN) + '% → ' + nm + '%' + lockNote, 'ok');
+  render();
+}
+
+// ---------------------------------------------------------------- 渲染
+function hexA(hex, a){
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+function render(){
+  var rk = rankOf();
+  if (S._rank && S._rank !== rk.name){
+    var unlocked = [];
+    S.ware.forEach(function(id){
+      if (ELEMS[id].tier === rk.matTier && unlocked.indexOf(ELEMS[id].name) < 0) unlocked.push(ELEMS[id].name);
+    });
+    toast('升阶 · ' + rk.name + (unlocked.length ? '　' + unlocked.join(' / ') + ' 现在能用了' : ''), true);
+  }
+  S._rank = rk.name;
+
+  renderWare();
+
+  for (var s = 0; s < 2; s++){
+    var box = $('slot' + s), idx = S.slots[s];
+    if (idx == null || S.ware[idx] == null){
+      box.className = 'slot'; box.innerHTML = '+';
+      box.style.borderColor = ''; box.style.boxShadow = ''; box.onclick = null;
+    } else {
+      var e2 = ELEMS[S.ware[idx]];
+      box.className = 'slot filled';
+      box.innerHTML = '<span class="ch" style="color:' + e2.c + '">' + e2.ch + '</span>';
+      box.style.borderColor = hexA(e2.c, .7);
+      box.style.boxShadow = 'inset 0 0 30px -6px ' + hexA(e2.c, .9);
+      (function(sl){ box.onclick = function(){ S.slots[sl] = null; render(); }; })(s);
+    }
+  }
+
+  var p = pairOf();
+  $('btnElem').disabled = !can();
+
+  if (!p) $('oddsE').textContent = '—';
+  else if (p.r.reduce) $('oddsE').textContent = REDUCE_RATE + '%（还原）';
+  else $('oddsE').textContent = (mastOf(p.r.element) >= 100 ? '必定成功' : mastOf(p.r.element) + '%');
+
+  // 台面提示
+  var ph = $('pairHint');
+  if (S.slots[0] == null || S.slots[1] == null){
+    ph.className = 'pairhint';
+    ph.textContent = '选两个材料放上台子';
+  } else if (!p && S.ware[S.slots[0]] != null && S.ware[S.slots[1]] != null){
+    ph.className = 'pairhint bad';
+    ph.textContent = ELEMS[S.ware[S.slots[0]]].name + ' + ' + ELEMS[S.ware[S.slots[1]]].name +
+      ' 没有反应 —— 换一种搭配';
+  } else if (p){
+    ph.className = 'pairhint good';
+    ph.textContent = '会得到「' + (p.r.reduce ? '水（还原）' : ELEMS[p.r.element].name) + '」';
+  }
+
+  $('rank').textContent = rk.name;
+  var nx = nextRank();
+  $('rankProg').textContent = nx ? ('再发现 ' + (nx.min - discovered()) + ' 种新元素 → ' + nx.name) : '已到顶';
+  $('cEl').textContent = S.known.length;
+  $('cAll').textContent = ALL_ELEMS;
+
+  renderMast();
+  renderLog();
+  renderCodex();
+}
+
+function renderWare(){
+  var box = $('ware');
+  box.innerHTML = '';
+  if (!S.ware.length){
+    box.innerHTML = '<div class="ware-empty">仓库是空的 —— 点「刷新」抽 4 个基础元素</div>';
+  }
+  S.ware.forEach(function(id, i){
+    var e = ELEMS[id];
+    var locked = isLocked(id);
+    var sel = S.slots[0] === i || S.slots[1] === i;
+    var d = document.createElement('div');
+    d.className = 'wchip' + (sel ? ' sel' : '') + (locked ? ' locked' : '') + (i === freshIdx ? ' fresh' : '');
+    d.style.color = e.c;
+    d.style.borderColor = hexA(e.c, locked ? .18 : .45);
+    d.style.boxShadow = sel ? '' : 'inset 0 0 20px -8px ' + hexA(e.c, .85);
+    d.textContent = e.ch;
+    if (locked) d.innerHTML = e.ch + '<span class="lk">锁</span>';
+    d.title = e.name + '（' + tierName(e.tier) + '）' + (locked ? ' · ' + rankNameFor(e.tier) + '才能用' : '');
+    d.onclick = function(){ pick(i); };
+    d.oncontextmenu = function(ev){ ev.preventDefault(); discard(i); };
+    box.appendChild(d);
+  });
+  $('cap').textContent = S.ware.length + '/' + WARE_CAP;
+}
+
+function tierName(t){ return ['基础','一级','二级','三级'][t] || '?'; }
+function rankNameFor(t){
+  for (var i = 0; i < RANKS.length; i++) if (RANKS[i].matTier >= t) return RANKS[i].name;
+  return '高级魔法师';
+}
+
+function renderMast(){
+  var me = $('masteredList');
+  me.innerHTML = '';
+  if (!S.mastered.length){
+    me.innerHTML = '<span>已掌握：还没有（熟练度满 100% 才会常驻材料池）</span>';
+    return;
+  }
+  var span = document.createElement('span');
+  span.textContent = '已掌握：';
+  me.appendChild(span);
+  S.mastered.forEach(function(id){
+    var e = ELEMS[id], lk = isLocked(id);
+    var t = document.createElement('span');
+    t.className = 'mtag';
+    t.innerHTML = '<i style="background:' + e.c + '"></i>' + e.name + (lk ? '<em>高阶才可抽</em>' : '');
+    me.appendChild(t);
+  });
+}
+
+function renderLog(){
+  var box = $('log');
+  if (!S.log.length){ box.innerHTML = '<div class="log-empty">还没有记录</div>'; return; }
+  box.innerHTML = '';
+  S.log.forEach(function(it){
+    var d = document.createElement('div');
+    d.className = 'entry';
+    var from = it.from.map(function(x){ return ELEMS[x].name; }).join(' + ');
+    var e = ELEMS[it.id];
+    if (it.type === 'reduce'){
+      d.innerHTML =
+        '<div class="dot" style="color:' + e.c + ';background:' + hexA(e.c, .16) + '">' + e.ch + '</div>' +
+        '<div class="body"><div class="name">' + e.name + ' <span class="from" style="display:inline">还原</span></div>' +
+        '<div class="from">' + from + '</div></div><div class="tag re">还原</div>';
+    } else {
+      d.innerHTML =
+        '<div class="dot" style="color:' + e.c + ';background:' + hexA(e.c, .16) + '">' + e.ch + '</div>' +
+        '<div class="body"><div class="name">' + e.name +
+        ' <span class="from" style="display:inline">' + (it.mast >= 100 ? '已掌握' : it.mast + '%') + '</span></div>' +
+        '<div class="from">' + from + '</div></div><div class="tag el">' + tierName(e.tier) + '</div>';
+    }
+    box.appendChild(d);
+  });
+}
+
+function renderCodex(){
+  var box = $('codex');
+  box.innerHTML = '';
+  var groups = [[0,'基础'],[1,'一级'],[2,'二级'],[3,'三级']];
+  groups.forEach(function(g){
+    var col = document.createElement('div');
+    col.className = 'tier';
+    var h = document.createElement('h4');
+    h.textContent = g[1];
+    col.appendChild(h);
+    var row = document.createElement('div');
+    row.className = 'row';
+    Object.keys(ELEMS).forEach(function(id){
+      if (ELEMS[id].tier !== g[0]) return;
+      var known = S.known.indexOf(id) >= 0;
+      var e = ELEMS[id];
+      var s = document.createElement('span');
+      s.className = 'cx' + (known ? '' : ' unknown');
+      s.innerHTML = '<i style="background:' + (known ? e.c : '#1c2836') +
+        ';color:' + (known ? '#0a0f16' : '#3d4c60') + '">' + (known ? e.ch : '?') + '</i>' +
+        (known ? e.name : '???');
+      row.appendChild(s);
+    });
+    col.appendChild(row);
+    box.appendChild(col);
+  });
+}
+
+// ---------------------------------------------------------------- 交互
+function pick(i){
+  if (isLocked(S.ware[i])) return say('「' + ELEMS[S.ware[i]].name + '」要 ' + rankNameFor(ELEMS[S.ware[i]].tier) + ' 才能用', 'info');
+  if (S.slots[0] === i){ S.slots[0] = null; return render(); }
+  if (S.slots[1] === i){ S.slots[1] = null; return render(); }
+  if (S.slots[0] == null) S.slots[0] = i;
+  else if (S.slots[1] == null) S.slots[1] = i;
+  else S.slots[1] = i;
+  render();
+}
+
+function discard(i){
+  var id = S.ware[i];
+  S.ware.splice(i, 1);
+  S.slots = [null, null];
+  render();
+  say('丢掉了「' + ELEMS[id].name + '」', '');
+}
+
+var shakeTimer = null;
+function shake(){
+  if (typeof document.querySelector !== 'function') return;
+  var b = document.querySelector('.bench');
+  if (!b) return;
+  b.classList.remove('shake');
+  void b.offsetWidth;
+  b.classList.add('shake');
+  if (shakeTimer) clearTimeout(shakeTimer);
+  shakeTimer = setTimeout(function(){ b.classList.remove('shake'); }, 400);
+}
+
+var msgTimer = null;
+function say(text, cls){
+  var m = $('msg');
+  m.textContent = text;
+  m.className = 'msg ' + (cls || '');
+  if (msgTimer) clearTimeout(msgTimer);
+  msgTimer = setTimeout(function(){ m.className = 'msg'; }, 2800);
+}
+
+var toastTimer = null;
+function toast(text, isNew){
+  var t = $('toast');
+  t.textContent = text;
+  t.className = 'toast show' + (isNew ? ' new' : '');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.className = 'toast'; }, 1700);
+}
+
+$('reroll').onclick = refresh;
+$('btnElem').onclick = attempt;
+$('reset').onclick = function(){ S = fresh(); render(); say('已重置', ''); };
+
+window.addEventListener('keydown', function(e){
+  var k = e.key;
+  if (k === 'r' || k === 'R') refresh();
+  else if (k === 'Enter') attempt();
+});
+
+refresh();
+say('先刷新抽材料，点两个放上台子', '');
+
+// ?seed=1 —— 演示用
+if (typeof location !== 'undefined' && /seed=1/.test(location.search)) {
+  S.known = ['fire','water','wind','earth','thunder','blast','metal','ice','poison','sand'];
+  S.mast = { thunder:60, blast:50, metal:70, ice:60, poison:50, sand:60 };
+  S.mastered = ['thunder','metal'];
+  S.ware = ['fire','water','fire','metal','ice','sand','poison','earth','thunder'];
+  S.log = [
+    { type:'element', id:'metal',  from:['earth','fire'], mast:70 },
+    { type:'element', id:'thunder',from:['fire','water'], mast:60 },
+    { type:'element', id:'ice',    from:['water','wind'], mast:60 },
+    { type:'reduce',  id:'water',  from:['fire','ice'] }
+  ];
+  S.slots = [0, 1];
+  render();
+  say('中级魔法师：火 + 水 可以炼「电」', 'info');
+}
+
+window.__AL = {
+  get state(){ return S; }, attempt: attempt, refresh: refresh, pick: pick,
+  discard: discard, RECIPES: RECIPES, ELEMS: ELEMS, rankOf: rankOf,
+  mastOf: mastOf, can: can, pairOf: pairOf, WARE_CAP: WARE_CAP,
+  ALL_ELEMS: ALL_ELEMS, BASE: BASE
+};
+})();
+</script>
+</body>
+</html>
