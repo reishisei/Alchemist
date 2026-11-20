@@ -23,6 +23,7 @@
   .rank .badge{padding:4px 13px;border-radius:99px;border:1px solid rgba(226,193,74,.45);
     color:var(--gold);font-size:12px;letter-spacing:.1em;}
   .rank .prog{color:#4a5b6e;font-size:11.5px;}
+  .school{font-size:11.5px;padding:4px 11px;border-radius:99px;letter-spacing:.1em;border:1px solid;}
   .counts{font-size:12.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace;}
   .counts b{color:var(--ink);}
   .reset{background:none;border:none;color:#41505f;font-size:12px;cursor:pointer;padding:4px 6px;}
@@ -47,6 +48,10 @@
   .wchip.locked::after{content:'';position:absolute;inset:0;border-radius:50%;
     background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(0,0,0,.25) 4px 8px);}
   .wchip .lk{position:absolute;right:-2px;bottom:-2px;font-size:9px;color:#c9873f;}
+  .wchip.inf{border-style:dashed;border-width:1.5px;background:rgba(255,255,255,.055);}
+  .wchip.inf .infty{position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;border-radius:50%;
+    background:#111a26;color:var(--gold);font-size:10px;line-height:14px;text-align:center;
+    border:1px solid rgba(226,193,74,.35);font-weight:400;}
   .ware-empty{color:#3d4c60;font-size:12px;padding:14px 0;}
   .mast{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;color:#4a5b6e;}
   .mtag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;
@@ -67,9 +72,10 @@
   @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(2px)}}
   .slot{width:78px;height:78px;border-radius:50%;border:1.5px dashed #2a3a4f;
     display:flex;align-items:center;justify-content:center;color:#33455c;font-size:24px;
-    cursor:pointer;transition:.15s;}
+    cursor:pointer;transition:.15s;position:relative;}
   .slot.filled{border-style:solid;border-color:transparent;}
   .slot .ch{font-size:24px;font-weight:700;}
+  .slot .infty{position:absolute;right:0;bottom:2px;font-size:10px;color:var(--gold);opacity:.8;}
   .plus{color:#33455c;font-size:18px;}
 
   .actions{display:flex;gap:10px;margin-top:6px;}
@@ -102,6 +108,7 @@
   .entry .tag{font-size:9.5px;padding:2px 7px;border-radius:99px;letter-spacing:.1em;flex:none;}
   .tag.el{background:rgba(111,179,255,.14);color:#8fc4ff;}
   .tag.re{background:rgba(90,210,176,.14);color:var(--teal);}
+  .tag.cap{background:rgba(201,135,63,.14);color:#c9873f;}
 
   .codex{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
   .tier h4{margin:0 0 8px;font-size:11px;letter-spacing:.14em;color:#3f5063;font-weight:400;}
@@ -112,12 +119,37 @@
     justify-content:center;font-size:9px;font-weight:700;font-style:normal;}
   .cx.unknown{opacity:.35;color:#4a5b6e;}
   .cx.unknown i{background:#1c2836 !important;color:#3d4c60;}
+  .cx .capn{font-size:8.5px;color:#c9873f;margin-left:1px;}
 
   .toast{position:fixed;left:50%;top:36px;transform:translateX(-50%);padding:11px 24px;
     border-radius:12px;background:#152233;border:1px solid #2a3b52;font-size:14px;
     opacity:0;pointer-events:none;transition:.3s;box-shadow:0 20px 50px -12px #000;z-index:9;}
   .toast.show{opacity:1;top:46px;}
   .toast.new{color:var(--gold);border-color:rgba(226,193,74,.5);}
+
+  /* ---------------- 选系 ---------------- */
+  .pick{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,10,16,.84);backdrop-filter:blur(7px);padding:24px;}
+  .pick.hide{display:none;}
+  .pick-card{width:640px;background:#111a26;border:1px solid #233246;border-radius:20px;
+    padding:30px 32px 26px;box-shadow:0 48px 100px -30px #000;}
+  .pick-card .kicker{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;
+    letter-spacing:.3em;color:var(--teal);margin-bottom:12px;}
+  .pick-card h2{font-size:24px;margin:0 0 10px;letter-spacing:.04em;}
+  .pick-card .lede{color:var(--muted);font-size:13px;line-height:1.85;margin:0 0 20px;}
+  .pick-card .lede b{color:var(--ink);font-weight:600;}
+  .pick-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .pick-opt{cursor:pointer;border:1px solid #22303f;border-radius:14px;padding:15px 16px 14px;
+    background:rgba(255,255,255,.02);transition:.15s;}
+  .pick-opt:hover{transform:translateY(-2px);border-color:currentColor;
+    box-shadow:0 16px 34px -22px #000;}
+  .pick-opt .top{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+  .pick-opt .orb{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;font-weight:700;font-size:15px;flex:none;}
+  .pick-opt .nm{font-size:15px;color:var(--ink);letter-spacing:.04em;}
+  .pick-opt .sub{font-size:11.5px;color:#6b7a8d;line-height:1.75;}
+  .pick-opt .sub b{color:#93a3b6;font-weight:400;}
+  .pick-foot{margin-top:18px;font-size:11.5px;color:#4a5b6e;line-height:1.8;}
 </style>
 </head>
 <body>
@@ -125,14 +157,18 @@
   <header>
     <h1>炼金台<span>ELEMENT TREE</span></h1>
     <div class="head-right">
-      <div class="rank"><span class="badge" id="rank">见习魔法师</span><span class="prog" id="rankProg"></span></div>
+      <div class="rank">
+        <span class="school" id="schoolBadge" style="display:none"></span>
+        <span class="badge" id="rank">见习魔法师</span>
+        <span class="prog" id="rankProg"></span>
+      </div>
       <div class="counts">已发现元素 <b id="cEl">4</b>/<span id="cAll">22</span></div>
-      <button class="reset" id="reset">重置</button>
+      <button class="reset" id="reset">重开</button>
     </div>
   </header>
 
   <section class="mod">
-    <div class="mod-title"><i>一</i> 材料仓库　<span class="hint">点两个放上炼金台 · 右键丢弃</span>
+    <div class="mod-title"><i>一</i> 材料仓库　<span class="hint">点两个放上炼金台 · 右键丢弃 · 本系 ∞ 不占仓库</span>
       <span class="cap" id="cap">0/24</span></div>
     <div class="ware" id="ware"></div>
     <div class="hand-row" style="margin-top:12px">
@@ -143,7 +179,7 @@
 
   <div class="cols">
     <section class="mod">
-      <div class="mod-title"><i>二</i> 炼金台</div>
+      <div class="mod-title"><i>二</i> 炼金台　<span class="hint">本系参与 85% 封顶 · 双外系才能到 100%</span></div>
       <div class="bench">
         <div class="slot" id="slot0">+</div>
         <div class="plus">+</div>
@@ -163,11 +199,28 @@
   </div>
 
   <section class="mod" style="margin-top:14px">
-    <div class="mod-title"><i>四</i> 元素图鉴　<span class="hint">??? 是还没撞出来的</span></div>
+    <div class="mod-title"><i>四</i> 元素图鉴　<span class="hint">??? 是还没撞出来的 · 85 表示本系封顶</span></div>
     <div class="codex" id="codex"></div>
   </section>
 
   <div class="toast" id="toast"></div>
+</div>
+
+<!-- 选系 -->
+<div class="pick" id="pick">
+  <div class="pick-card">
+    <div class="kicker">CHOOSE YOUR SCHOOL</div>
+    <h2>选一个元素系</h2>
+    <p class="lede">
+      本系元素<b>无限供应</b>，不占仓库。但只用本系换来的路线有天花板：
+      <b>本系参与 → 熟练度封顶 85%</b>；<b>两个外系素材 → 才能练到 100%（掌握）</b>。
+    </p>
+    <div class="pick-grid" id="pickGrid"></div>
+    <div class="pick-foot">
+      每种系能掌握的元素不一样 —— 右边数字是这棵树里「能练到 100%」的元素个数。
+      选完这一局不能改，想换就点右上角「重开」。
+    </div>
+  </div>
 </div>
 
 <script>
@@ -205,12 +258,16 @@ var ELEMS = {
 };
 var BASE = ['fire','water','earth','wind'];
 
+// ---------------------------------------------------------------- 调参
 var WARE_CAP   = 24;
 var REFRESH_N  = 4;
 var MAST_START = 50;
 var MAST_GAIN  = 25;
-var MAST_ON_FAIL = 4;   // 失败也给一点熟练度。0 = 严格按「成功才涨」；改成 4 能明显压住运气波动
-var REDUCE_RATE = 75;   // 还原类配方的成功率
+var MAST_ON_FAIL = 4;    // 失败也给一点熟练度
+var REDUCE_RATE = 75;    // 还原类配方的成功率
+var CAP_FREE_BOTH = 50;  // 两份素材都来自本系免费供应
+var CAP_MIXED     = 85;  // 一份本系 + 一份外系
+var PITY_N        = 2;   // 连续失败 N 次后，下一次必定成功（不做纯赌博）
 
 // ---------------------------------------------------------------- 配方表
 // 加配方就在这里加一行：'a+b': { element:'产物id' }
@@ -245,6 +302,14 @@ var RECIPES = {
 };
 
 var ALL_ELEMS = Object.keys(ELEMS).length;
+var SCHOOLS = ['fire','water','wind','earth'];
+
+// 所有"产物"（不含还原），用于选系页统计可掌握数量
+var PRODUCTS = [];
+Object.keys(RECIPES).forEach(function(k){
+  var r = RECIPES[k];
+  if (!r.reduce && PRODUCTS.indexOf(r.element) < 0) PRODUCTS.push(r.element);
+});
 
 // ---------------------------------------------------------------- 阶级
 // 阶级决定随机池里能抽到第几级元素（合成本身不受限）
@@ -272,9 +337,44 @@ function nextRank(){
 }
 function isLocked(id){ return ELEMS[id].tier > rankOf().matTier; }
 
+// ---------------------------------------------------------------- 熟练度天花板
+// 判定只看"这对素材从哪来"：
+//   两份都来自本系免费供应 → 50%
+//   一份本系 + 一份外系      → 85%
+//   两份都是外系            → 100%（唯一能「掌握」的路）
+function capForPair(a, b, school){
+  school = school || S.school;
+  var fa = (a === school), fb = (b === school);
+  if (fa && fb) return CAP_FREE_BOTH;
+  if (fa || fb) return CAP_MIXED;
+  return 100;
+}
+
+var capCache = {};
+function recipeKeyOf(id){
+  for (var k in RECIPES){
+    if (RECIPES[k].element === id && !RECIPES[k].reduce) return k;
+  }
+  return null;
+}
+// 每个产物只有一条配方，所以它的上限只跟"选系"有关
+function capOfElement(id, school){
+  school = school || S.school;
+  if (!school) return 100;
+  var m = capCache[school] || (capCache[school] = {});
+  if (m[id] == null){
+    var k = recipeKeyOf(id);
+    m[id] = k ? capForPair(k.split('+')[0], k.split('+')[1], school) : 100;
+  }
+  return m[id];
+}
+
 // ---------------------------------------------------------------- 状态
 function fresh(){
-  return { known: BASE.slice(), mast:{}, mastered:[], log:[], ware:[], slots:[null,null], _rank:null };
+  return {
+    school:null, known:BASE.slice(), mast:{}, mastered:[],
+    log:[], ware:[], slots:[null,null], fails:0, _rank:null
+  };
 }
 var S = fresh();
 var freshIdx = -1, freshTimer = null;
@@ -289,7 +389,10 @@ function flashNew(i){
 // ---------------------------------------------------------------- 抽牌
 function poolIds(){
   var out = [];
-  BASE.forEach(function(id){ for (var i = 0; i < 8; i++) out.push(id); });
+  BASE.forEach(function(id){
+    if (id === S.school) return;            // 本系无限，不用抽
+    for (var i = 0; i < 8; i++) out.push(id);
+  });
   var mt = rankOf().matTier;
   S.mastered.forEach(function(id){
     if (ELEMS[id].tier > mt) return;
@@ -299,6 +402,7 @@ function poolIds(){
 }
 
 function refresh(){
+  if (!S.school) return;
   var room = WARE_CAP - S.ware.length;
   if (room <= 0) return say('仓库满了（' + WARE_CAP + '）—— 右键丢一个，或先合成', 'bad');
   var n = Math.min(REFRESH_N, room);
@@ -306,82 +410,118 @@ function refresh(){
   for (var i = 0; i < n; i++) S.ware.push(pool[Math.floor(Math.random() * pool.length)]);
   S.slots = [null, null];
   render();
-  say('入库 ' + n + ' 个材料', '');
+  say('入库 ' + n + ' 个外系材料', '');
 }
 
 // ---------------------------------------------------------------- 判定
 function mastOf(id){ return (S.mast[id] == null) ? MAST_START : S.mast[id]; }
+function rateOf(p){
+  if (p.r.reduce) return REDUCE_RATE;
+  return Math.min(mastOf(p.r.element), capOfElement(p.r.element));
+}
+
+// 台子上的两个材料：{src:'school'} 或 {src:'ware', i}
+function slotIds(){
+  return S.slots.map(function(s){
+    if (!s) return null;
+    if (s.src === 'school') return S.school;
+    return (S.ware[s.i] == null) ? null : S.ware[s.i];
+  });
+}
 
 function pairOf(){
-  if (S.slots[0] == null || S.slots[1] == null) return null;
-  var a = S.ware[S.slots[0]], b = S.ware[S.slots[1]];
-  if (a == null || b == null) return null;
+  var ids = slotIds();
+  if (ids[0] == null || ids[1] == null) return null;
+  var a = ids[0], b = ids[1];
   var r = RECIPES[a < b ? a + '+' + b : b + '+' + a];
-  return r ? { a:a, b:b, r:r } : null;
+  if (!r) return null;
+  return { a:a, b:b, r:r };
 }
 
 function can(){
   var p = pairOf();
-  return !!(p && p.r.element);
-}
-
-function rateOf(p){
-  if (p.r.reduce) return REDUCE_RATE;
-  return mastOf(p.r.element);
+  return !!(p && p.r.element && S.school);
 }
 
 // ---------------------------------------------------------------- 合成
+// 返回产物落回的位置；只消耗仓库里的材料，本系 ∞ 不消耗
 function consumeTwo(){
-  var i = S.slots[0], j = S.slots[1];
-  var hi = Math.max(i, j), lo = Math.min(i, j);
-  S.ware.splice(hi, 1);
-  S.ware.splice(lo, 1);
+  var rm = [];
+  S.slots.forEach(function(s){ if (s && s.src === 'ware') rm.push(s.i); });
+  rm.sort(function(x, y){ return y - x; });
+  var at = -1;
+  rm.forEach(function(i){
+    if (at < 0 || i < at) at = i;
+    S.ware.splice(i, 1);
+  });
   S.slots = [null, null];
-  return lo;
+  return at < 0 ? S.ware.length : at;
 }
 
 function attempt(){
   if (!can()) return;
   var p = pairOf();
-  var a = p.a, b = p.b, r = p.r;
-  var target = r.element;
-  var m = rateOf(p);
+  var a = p.a, b = p.b, r = p.r, target = r.element;
+  var cap = r.reduce ? 100 : capOfElement(target);
+  var base = rateOf(p);
+  var pity = !r.reduce && S.fails >= PITY_N;
 
-  if (m < 100 && Math.random() * 100 >= m){
-    if (MAST_ON_FAIL > 0 && !r.reduce && !isLocked(target)){
-      S.mast[target] = Math.min(99, mastOf(target) + MAST_ON_FAIL);
+  if (!pity && base < 100 && Math.random() * 100 >= base){
+    if (MAST_ON_FAIL > 0 && !r.reduce && !isLocked(target) && mastOf(target) < cap){
+      S.mast[target] = Math.min(cap, mastOf(target) + MAST_ON_FAIL);
     }
+    S.fails++;
     consumeTwo();
     render();
     shake();
-    return say('失败 · 材料 -2　' + (r.reduce ? '还原成功率 ' : '熟练度 ') + (r.reduce ? m : mastOf(target)) + '%', 'bad');
+    var tail;
+    if (r.reduce){
+      tail = '还原成功率 ' + base + '%';
+    } else if (mastOf(target) >= cap){
+      tail = '熟练度 ' + cap + '% 封顶 · 再失败 ' + Math.max(0, PITY_N - S.fails) + ' 次必成';
+    } else {
+      tail = '熟练度 ' + mastOf(target) + '% · 再失败 ' + Math.max(0, PITY_N - S.fails) + ' 次必成';
+    }
+    return say('失败 · 材料 -2　' + tail, 'bad');
   }
 
+  S.fails = 0;
   var at = consumeTwo();
-  S.ware.splice(at, 0, target);
-  flashNew(at);
+  var freeProduct = (target === S.school);
 
   if (r.reduce){
+    if (!freeProduct) S.ware.splice(at, 0, target);
+    flashNew(at);
     S.log.unshift({ type:'reduce', id:target, from:[a,b] });
     toast('还原 · 变回' + ELEMS[target].name, false);
-    say('还原成「' + ELEMS[target].name + '」', 'ok');
+    say('还原成「' + ELEMS[target].name + '」' + (freeProduct ? '（本系 ∞，不入库）' : ''), 'ok');
     render();
     return;
   }
 
-  var nm = Math.min(100, mastOf(target) + MAST_GAIN);
-  S.mast[target] = nm;
+  if (!freeProduct) S.ware.splice(at, 0, target);
+  flashNew(at);
   if (S.known.indexOf(target) < 0) S.known.push(target);
+
+  var old = Math.min(mastOf(target), cap);
+  var nm = Math.min(cap, old + MAST_GAIN);
+  S.mast[target] = nm;
+  S.log.unshift({ type:'element', id:target, from:[a,b], mast:nm, cap:cap });
+
   if (nm >= 100 && S.mastered.indexOf(target) < 0){
     S.mastered.push(target);
     toast('掌握 · ' + ELEMS[target].name + ' 常驻材料池', true);
+  } else if (nm >= cap && cap < 100 && old < cap){
+    toast('封顶 · ' + ELEMS[target].name + ' ' + cap + '%', true);
   } else {
     toast('炼成 · ' + ELEMS[target].name + '（' + nm + '%）', true);
   }
-  S.log.unshift({ type:'element', id:target, from:[a,b], mast:nm });
 
   var lockNote = isLocked(target) ? '（' + rankOf().name + '用不了，先囤着）' : '';
-  say('炼成「' + ELEMS[target].name + '」· 材料 -2　熟练度 ' + (nm - MAST_GAIN) + '% → ' + nm + '%' + lockNote, 'ok');
+  var prog = (nm > old)
+    ? ('熟练度 ' + old + '% → ' + nm + '%' + (cap < 100 && nm >= cap ? '　封顶' : ''))
+    : ('熟练度 ' + nm + '%' + (cap < 100 ? '（已封顶）' : ''));
+  say('炼成「' + ELEMS[target].name + '」· ' + prog + lockNote, 'ok');
   render();
 }
 
@@ -392,6 +532,7 @@ function hexA(hex, a){
 }
 
 function render(){
+  renderPick();
   var rk = rankOf();
   if (S._rank && S._rank !== rk.name){
     var unlocked = [];
@@ -404,15 +545,18 @@ function render(){
 
   renderWare();
 
+  var ids = slotIds();
   for (var s = 0; s < 2; s++){
-    var box = $('slot' + s), idx = S.slots[s];
-    if (idx == null || S.ware[idx] == null){
+    var box = $('slot' + s), id = ids[s];
+    if (id == null){
       box.className = 'slot'; box.innerHTML = '+';
       box.style.borderColor = ''; box.style.boxShadow = ''; box.onclick = null;
     } else {
-      var e2 = ELEMS[S.ware[idx]];
+      var e2 = ELEMS[id];
+      var isFree = (id === S.school);
       box.className = 'slot filled';
-      box.innerHTML = '<span class="ch" style="color:' + e2.c + '">' + e2.ch + '</span>';
+      box.innerHTML = '<span class="ch" style="color:' + e2.c + '">' + e2.ch + '</span>' +
+        (isFree ? '<span class="infty">∞</span>' : '');
       box.style.borderColor = hexA(e2.c, .7);
       box.style.boxShadow = 'inset 0 0 30px -6px ' + hexA(e2.c, .9);
       (function(sl){ box.onclick = function(){ S.slots[sl] = null; render(); }; })(s);
@@ -420,24 +564,39 @@ function render(){
   }
 
   var p = pairOf();
+  var cap = p && !p.r.reduce ? capOfElement(p.r.element) : 100;
   $('btnElem').disabled = !can();
 
   if (!p) $('oddsE').textContent = '—';
   else if (p.r.reduce) $('oddsE').textContent = REDUCE_RATE + '%（还原）';
-  else $('oddsE').textContent = (mastOf(p.r.element) >= 100 ? '必定成功' : mastOf(p.r.element) + '%');
+  else if (S.fails >= PITY_N) $('oddsE').textContent = '必定成功（保底）';
+  else if (rateOf(p) >= 100) $('oddsE').textContent = '必定成功';
+  else $('oddsE').textContent = rateOf(p) + '%' + (rateOf(p) >= cap && cap < 100 ? '（封顶）' : '');
 
   // 台面提示
   var ph = $('pairHint');
-  if (S.slots[0] == null || S.slots[1] == null){
+  if (ids[0] == null || ids[1] == null){
     ph.className = 'pairhint';
-    ph.textContent = '选两个材料放上台子';
-  } else if (!p && S.ware[S.slots[0]] != null && S.ware[S.slots[1]] != null){
+    ph.textContent = '选两个材料放上台子' + (S.school ? '（本系「' + ELEMS[S.school].name + '」无限）' : '');
+  } else if (!p){
     ph.className = 'pairhint bad';
-    ph.textContent = ELEMS[S.ware[S.slots[0]]].name + ' + ' + ELEMS[S.ware[S.slots[1]]].name +
-      ' 没有反应 —— 换一种搭配';
-  } else if (p){
+    ph.textContent = ELEMS[ids[0]].name + ' + ' + ELEMS[ids[1]].name + ' 没有反应 —— 换一种搭配';
+  } else {
     ph.className = 'pairhint good';
-    ph.textContent = '会得到「' + (p.r.reduce ? '水（还原）' : ELEMS[p.r.element].name) + '」';
+    var capTxt = cap < 100 ? '　上限 ' + cap + '%' : '　可到 100%';
+    ph.textContent = '会得到「' + (p.r.reduce ? '水（还原）' : ELEMS[p.r.element].name) + '」' + capTxt;
+  }
+
+  var sb = $('schoolBadge');
+  if (S.school){
+    var se = ELEMS[S.school];
+    sb.style.display = '';
+    sb.textContent = se.name + '系';
+    sb.style.color = se.c;
+    sb.style.borderColor = hexA(se.c, .45);
+    sb.style.background = hexA(se.c, .08);
+  } else {
+    sb.style.display = 'none';
   }
 
   $('rank').textContent = rk.name;
@@ -454,26 +613,47 @@ function render(){
 function renderWare(){
   var box = $('ware');
   box.innerHTML = '';
+  if (!S.school){
+    box.innerHTML = '<div class="ware-empty">先选一个元素系</div>';
+    $('cap').textContent = '0/' + WARE_CAP;
+    return;
+  }
+  // 本系 ∞
+  var sf = document.createElement('div');
+  var selSchool = S.slots.some(function(s){ return s && s.src === 'school'; });
+  var e = ELEMS[S.school];
+  sf.className = 'wchip inf' + (selSchool ? ' sel' : '');
+  sf.style.color = e.c;
+  sf.style.borderColor = hexA(e.c, .55);
+  sf.style.boxShadow = 'inset 0 0 22px -8px ' + hexA(e.c, .9);
+  sf.innerHTML = e.ch + '<span class="infty">∞</span>';
+  sf.title = '本系「' + e.name + '」· 无限供应，不占仓库';
+  sf.onclick = pickSchool;
+  box.appendChild(sf);
+
   if (!S.ware.length){
-    box.innerHTML = '<div class="ware-empty">仓库是空的 —— 点「刷新」抽 4 个基础元素</div>';
+    var d0 = document.createElement('div');
+    d0.className = 'ware-empty';
+    d0.textContent = '外系仓库是空的 —— 点「刷新」抽 4 个';
+    box.appendChild(d0);
   }
   S.ware.forEach(function(id, i){
-    var e = ELEMS[id];
+    var el = ELEMS[id];
     var locked = isLocked(id);
-    var sel = S.slots[0] === i || S.slots[1] === i;
+    var sel = S.slots.some(function(s){ return s && s.src === 'ware' && s.i === i; });
     var d = document.createElement('div');
     d.className = 'wchip' + (sel ? ' sel' : '') + (locked ? ' locked' : '') + (i === freshIdx ? ' fresh' : '');
-    d.style.color = e.c;
-    d.style.borderColor = hexA(e.c, locked ? .18 : .45);
-    d.style.boxShadow = sel ? '' : 'inset 0 0 20px -8px ' + hexA(e.c, .85);
-    d.textContent = e.ch;
-    if (locked) d.innerHTML = e.ch + '<span class="lk">锁</span>';
-    d.title = e.name + '（' + tierName(e.tier) + '）' + (locked ? ' · ' + rankNameFor(e.tier) + '才能用' : '');
+    d.style.color = el.c;
+    d.style.borderColor = hexA(el.c, locked ? .18 : .45);
+    d.style.boxShadow = sel ? '' : 'inset 0 0 20px -8px ' + hexA(el.c, .85);
+    d.textContent = el.ch;
+    if (locked) d.innerHTML = el.ch + '<span class="lk">锁</span>';
+    d.title = el.name + '（' + tierName(el.tier) + '）' + (locked ? ' · ' + rankNameFor(el.tier) + '才能用' : '');
     d.onclick = function(){ pick(i); };
     d.oncontextmenu = function(ev){ ev.preventDefault(); discard(i); };
     box.appendChild(d);
   });
-  $('cap').textContent = S.ware.length + '/' + WARE_CAP;
+  $('cap').textContent = S.ware.length + '/' + WARE_CAP + ' ＋∞';
 }
 
 function tierName(t){ return ['基础','一级','二级','三级'][t] || '?'; }
@@ -486,7 +666,7 @@ function renderMast(){
   var me = $('masteredList');
   me.innerHTML = '';
   if (!S.mastered.length){
-    me.innerHTML = '<span>已掌握：还没有（熟练度满 100% 才会常驻材料池）</span>';
+    me.innerHTML = '<span>已掌握：还没有（100% 才算掌握，本系路线封顶 85%）</span>';
     return;
   }
   var span = document.createElement('span');
@@ -516,11 +696,14 @@ function renderLog(){
         '<div class="body"><div class="name">' + e.name + ' <span class="from" style="display:inline">还原</span></div>' +
         '<div class="from">' + from + '</div></div><div class="tag re">还原</div>';
     } else {
+      var capTag = (it.cap != null && it.cap < 100 && it.mast >= it.cap)
+        ? ('<div class="tag cap">封顶 ' + it.cap + '%</div>') : '';
       d.innerHTML =
         '<div class="dot" style="color:' + e.c + ';background:' + hexA(e.c, .16) + '">' + e.ch + '</div>' +
         '<div class="body"><div class="name">' + e.name +
         ' <span class="from" style="display:inline">' + (it.mast >= 100 ? '已掌握' : it.mast + '%') + '</span></div>' +
-        '<div class="from">' + from + '</div></div><div class="tag el">' + tierName(e.tier) + '</div>';
+        '<div class="from">' + from + '</div></div>' +
+        (capTag || ('<div class="tag el">' + tierName(e.tier) + '</div>'));
     }
     box.appendChild(d);
   });
@@ -542,11 +725,13 @@ function renderCodex(){
       if (ELEMS[id].tier !== g[0]) return;
       var known = S.known.indexOf(id) >= 0;
       var e = ELEMS[id];
+      var cap = capOfElement(id);
       var s = document.createElement('span');
       s.className = 'cx' + (known ? '' : ' unknown');
       s.innerHTML = '<i style="background:' + (known ? e.c : '#1c2836') +
         ';color:' + (known ? '#0a0f16' : '#3d4c60') + '">' + (known ? e.ch : '?') + '</i>' +
-        (known ? e.name : '???');
+        (known ? e.name : '???') +
+        (known && cap < 100 ? '<span class="capn">' + cap + '</span>' : '');
       row.appendChild(s);
     });
     col.appendChild(row);
@@ -554,14 +739,76 @@ function renderCodex(){
   });
 }
 
+// ---------------------------------------------------------------- 选系
+var pickerBuilt = false;
+function renderPick(){
+  var box = $('pick');
+  if (!box) return;
+  box.className = 'pick' + (S.school ? ' hide' : '');
+  if (S.school || pickerBuilt) return;
+  pickerBuilt = true;
+
+  var grid = $('pickGrid');
+  grid.innerHTML = '';
+  SCHOOLS.forEach(function(id){
+    var e = ELEMS[id];
+    var canMaster = 0;
+    PRODUCTS.forEach(function(pid){
+      if (capOfElement(pid, id) >= 100) canMaster++;
+    });
+    var d = document.createElement('div');
+    d.className = 'pick-opt';
+    d.style.color = e.c;
+    d.innerHTML =
+      '<div class="top"><span class="orb" style="background:' + hexA(e.c, .16) + ';color:' + e.c +
+      ';border:1px solid ' + hexA(e.c, .45) + '">' + e.ch + '</span>' +
+      '<span class="nm">' + e.name + '系</span></div>' +
+      '<div class="sub">本系「' + e.name + '」无限 · 可掌握 <b>' + canMaster + '/' + PRODUCTS.length +
+      '</b> 种<br>其余 ' + (PRODUCTS.length - canMaster) + ' 种最多练到 ' + CAP_MIXED + '%</div>';
+    d.onclick = function(){ chooseSchool(id); };
+    grid.appendChild(d);
+  });
+}
+
+function chooseSchool(id){
+  if (SCHOOLS.indexOf(id) < 0) return;
+  S.school = id;
+  S.ware = S.ware.filter(function(x){ return x !== id; });  // 本系不进外系仓库
+  S.slots = [null, null];
+  S.fails = 0;
+  S._rank = null;
+  capCache = {};
+  refresh();
+  render();
+  toast('本系 · ' + ELEMS[id].name + ' ∞', true);
+  say('本系「' + ELEMS[id].name + '」无限供应，不占仓库', 'info');
+}
+
 // ---------------------------------------------------------------- 交互
+function pickSchool(){
+  for (var s = 0; s < 2; s++){
+    if (S.slots[s] && S.slots[s].src === 'school'){
+      S.slots[s] = null;
+      return render();
+    }
+  }
+  var at = S.slots[0] == null ? 0 : (S.slots[1] == null ? 1 : 1);
+  S.slots[at] = { src:'school' };
+  render();
+}
+
 function pick(i){
-  if (isLocked(S.ware[i])) return say('「' + ELEMS[S.ware[i]].name + '」要 ' + rankNameFor(ELEMS[S.ware[i]].tier) + ' 才能用', 'info');
-  if (S.slots[0] === i){ S.slots[0] = null; return render(); }
-  if (S.slots[1] === i){ S.slots[1] = null; return render(); }
-  if (S.slots[0] == null) S.slots[0] = i;
-  else if (S.slots[1] == null) S.slots[1] = i;
-  else S.slots[1] = i;
+  var id = S.ware[i];
+  if (id == null) return;
+  if (isLocked(id)) return say('「' + ELEMS[id].name + '」要 ' + rankNameFor(ELEMS[id].tier) + ' 才能用', 'info');
+  for (var s = 0; s < 2; s++){
+    if (S.slots[s] && S.slots[s].src === 'ware' && S.slots[s].i === i){
+      S.slots[s] = null;
+      return render();
+    }
+  }
+  var at = S.slots[0] == null ? 0 : (S.slots[1] == null ? 1 : 1);
+  S.slots[at] = { src:'ware', i:i };
   render();
 }
 
@@ -605,7 +852,7 @@ function toast(text, isNew){
 
 $('reroll').onclick = refresh;
 $('btnElem').onclick = attempt;
-$('reset').onclick = function(){ S = fresh(); render(); say('已重置', ''); };
+$('reset').onclick = function(){ S = fresh(); render(); say('已重置，重新选系', ''); };
 
 window.addEventListener('keydown', function(e){
   var k = e.key;
@@ -613,31 +860,41 @@ window.addEventListener('keydown', function(e){
   else if (k === 'Enter') attempt();
 });
 
-refresh();
-say('先刷新抽材料，点两个放上台子', '');
+render();
 
-// ?seed=1 —— 演示用
-if (typeof location !== 'undefined' && /seed=1/.test(location.search)) {
+// ?school=fire            —— 直接进这个系（截图 / 调试用）
+// ?seed=1                 —— 预置一局中盘状态
+var _q = (typeof location !== 'undefined') ? location.search : '';
+var _sm = _q.match(/school=(fire|water|wind|earth)/);
+if (_sm) chooseSchool(_sm[1]);
+
+if (/seed=1/.test(_q)) {
+  if (!S.school) chooseSchool('fire');
   S.known = ['fire','water','wind','earth','thunder','blast','metal','ice','poison','sand'];
-  S.mast = { thunder:60, blast:50, metal:70, ice:60, poison:50, sand:60 };
-  S.mastered = ['thunder','metal'];
-  S.ware = ['fire','water','fire','metal','ice','sand','poison','earth','thunder'];
+  S.mast = { thunder:85, blast:60, metal:70, ice:60, poison:50, sand:60 };
+  S.mastered = ['ice'];
+  S.ware = ['water','wind','earth','sand','poison','metal'];
+  S.slots = [{ src:'school' }, { src:'ware', i:0 }];
   S.log = [
-    { type:'element', id:'metal',  from:['earth','fire'], mast:70 },
-    { type:'element', id:'thunder',from:['fire','water'], mast:60 },
-    { type:'element', id:'ice',    from:['water','wind'], mast:60 },
+    { type:'element', id:'metal',  from:['earth','fire'], mast:70, cap:85 },
+    { type:'element', id:'thunder',from:['fire','water'], mast:85, cap:85 },
+    { type:'element', id:'ice',    from:['water','wind'], mast:100, cap:100 },
     { type:'reduce',  id:'water',  from:['fire','ice'] }
   ];
-  S.slots = [0, 1];
   render();
-  say('中级魔法师：火 + 水 可以炼「电」', 'info');
+  say('火 + 水 是 85% 封顶 —— 想练满，得凑两个外系', 'info');
 }
 
 window.__AL = {
   get state(){ return S; }, attempt: attempt, refresh: refresh, pick: pick,
-  discard: discard, RECIPES: RECIPES, ELEMS: ELEMS, rankOf: rankOf,
-  mastOf: mastOf, can: can, pairOf: pairOf, WARE_CAP: WARE_CAP,
-  ALL_ELEMS: ALL_ELEMS, BASE: BASE
+  pickSchool: pickSchool, discard: discard, chooseSchool: chooseSchool,
+  RECIPES: RECIPES, ELEMS: ELEMS, rankOf: rankOf, mastOf: mastOf, can: can, pairOf: pairOf,
+  capOfElement: capOfElement, capForPair: capForPair, rateOf: rateOf, poolIds: poolIds,
+  clearCaps: function(){ capCache = {}; }, slotIds: slotIds,
+  WARE_CAP: WARE_CAP, ALL_ELEMS: ALL_ELEMS, BASE: BASE, SCHOOLS: SCHOOLS,
+  CAP_MIXED: CAP_MIXED, CAP_FREE_BOTH: CAP_FREE_BOTH, PITY_N: PITY_N,
+  wareSlot: function(i){ return { src:'ware', i:i }; },
+  schoolSlot: function(){ return { src:'school' }; }
 };
 })();
 </script>
