@@ -179,7 +179,7 @@
 
   <div class="cols">
     <section class="mod">
-      <div class="mod-title"><i>二</i> 炼金台　<span class="hint">本系参与 85% 封顶 · 双外系才能到 100%</span></div>
+      <div class="mod-title"><i>二</i> 炼金台　<span class="hint">本系参与 85% · 纯外系 35% · 元素没有 100%</span></div>
       <div class="bench">
         <div class="slot" id="slot0">+</div>
         <div class="plus">+</div>
@@ -212,12 +212,13 @@
     <div class="kicker">CHOOSE YOUR SCHOOL</div>
     <h2>选一个元素系</h2>
     <p class="lede">
-      本系元素<b>无限供应</b>，不占仓库。但只用本系换来的路线有天花板：
-      <b>本系参与 → 熟练度封顶 85%</b>；<b>两个外系素材 → 才能练到 100%（掌握）</b>。
+      本系元素<b>无限供应</b>，不占仓库。熟练度上限按用料叠加：
+      <b>本系 50 + 外系 35 = 85</b>；两类各自都不叠加。
+      <b>元素合成永远到不了 100%</b>——100% 是技能的事，升阶也只数技能。
     </p>
     <div class="pick-grid" id="pickGrid"></div>
     <div class="pick-foot">
-      每种系能掌握的元素不一样 —— 右边数字是这棵树里「能练到 100%」的元素个数。
+      每个系的「本系加成」不一样 —— 带本系的条数上限 85%，其余只能靠纯外系（上限 35%）。
       选完这一局不能改，想换就点右上角「重开」。
     </div>
   </div>
@@ -265,8 +266,9 @@ var MAST_START = 50;
 var MAST_GAIN  = 25;
 var MAST_ON_FAIL = 4;    // 失败也给一点熟练度
 var REDUCE_RATE = 75;    // 还原类配方的成功率
-var CAP_FREE_BOTH = 50;  // 两份素材都来自本系免费供应
-var CAP_MIXED     = 85;  // 一份本系 + 一份外系
+var CAP_SCHOOL_BOTH   = 50;  // 本系 + 本系
+var CAP_SCHOOL_MIXED  = 85;  // 本系 + 外系（50 的底子 + 35 的底子）
+var CAP_EXTERNAL_ONLY = 35;  // 外系 + 外系（两个外系不叠加）
 var PITY_N        = 2;   // 连续失败 N 次后，下一次必定成功（不做纯赌博）
 
 // ---------------------------------------------------------------- 配方表
@@ -304,7 +306,7 @@ var RECIPES = {
 var ALL_ELEMS = Object.keys(ELEMS).length;
 var SCHOOLS = ['fire','water','wind','earth'];
 
-// 所有"产物"（不含还原），用于选系页统计可掌握数量
+// 所有"产物"（不含还原），用于选系页统计 85% / 35% 各多少条
 var PRODUCTS = [];
 Object.keys(RECIPES).forEach(function(k){
   var r = RECIPES[k];
@@ -312,42 +314,38 @@ Object.keys(RECIPES).forEach(function(k){
 });
 
 // ---------------------------------------------------------------- 阶级
-// 阶级决定随机池里能抽到第几级元素（合成本身不受限）
+// 升阶只数「练到 100% 的技能」——元素发现、高阶元素都不算进度。
+// 技能层还没做，所以 skillsMastered() 目前恒为 0，这一局升不了阶。
 var RANKS = [
-  { name:'见习魔法师', min:0, matTier:0 },   // 只能抽基础
-  { name:'中级魔法师', min:3, matTier:1 },   // 能抽一级
-  { name:'高级魔法师', min:7, matTier:3 }    // 能抽二级三级
+  { name:'见习魔法师', min:0 },
+  { name:'中级魔法师', min:1 },
+  { name:'高级魔法师', min:3 }
 ];
 
-// 只数"新发现"的，基础四元素不算
-function discovered(){
-  var n = 0;
-  S.known.forEach(function(id){ if (ELEMS[id].tier > 0) n++; });
-  return n;
-}
+function skillsMastered(){ return 0; }   // TODO(技能层)：技能掌握到 100% 后在这里 +1
 function rankOf(){
-  var r = RANKS[0], d = discovered();
-  for (var i = 0; i < RANKS.length; i++) if (d >= RANKS[i].min) r = RANKS[i];
+  var r = RANKS[0], m = skillsMastered();
+  for (var i = 0; i < RANKS.length; i++) if (m >= RANKS[i].min) r = RANKS[i];
   return r;
 }
 function nextRank(){
-  var d = discovered();
-  for (var i = 0; i < RANKS.length; i++) if (d < RANKS[i].min) return RANKS[i];
+  var m = skillsMastered();
+  for (var i = 0; i < RANKS.length; i++) if (m < RANKS[i].min) return RANKS[i];
   return null;
 }
-function isLocked(id){ return ELEMS[id].tier > rankOf().matTier; }
 
 // ---------------------------------------------------------------- 熟练度天花板
-// 判定只看"这对素材从哪来"：
-//   两份都来自本系免费供应 → 50%
-//   一份本系 + 一份外系      → 85%
-//   两份都是外系            → 100%（唯一能「掌握」的路）
+// 本系给 50 的底子，外系给 35 的底子，两个叠起来才是 85；同类不叠加。
+//   · 本系 + 本系 → 50
+//   · 本系 + 外系 → 85
+//   · 外系 + 外系 → 35
+// 元素合成永远到不了 100% —— 100% 只属于技能。
 function capForPair(a, b, school){
   school = school || S.school;
   var fa = (a === school), fb = (b === school);
-  if (fa && fb) return CAP_FREE_BOTH;
-  if (fa || fb) return CAP_MIXED;
-  return 100;
+  if (fa && fb) return CAP_SCHOOL_BOTH;
+  if (fa || fb) return CAP_SCHOOL_MIXED;
+  return CAP_EXTERNAL_ONLY;
 }
 
 var capCache = {};
@@ -372,8 +370,8 @@ function capOfElement(id, school){
 // ---------------------------------------------------------------- 状态
 function fresh(){
   return {
-    school:null, known:BASE.slice(), mast:{}, mastered:[],
-    log:[], ware:[], slots:[null,null], fails:0, _rank:null
+    school:null, known:BASE.slice(), mast:{},
+    log:[], ware:[], slots:[null,null], fails:0
   };
 }
 var S = fresh();
@@ -393,11 +391,6 @@ function poolIds(){
     if (id === S.school) return;            // 本系无限，不用抽
     for (var i = 0; i < 8; i++) out.push(id);
   });
-  var mt = rankOf().matTier;
-  S.mastered.forEach(function(id){
-    if (ELEMS[id].tier > mt) return;
-    for (var i = 0; i < 5; i++) out.push(id);
-  });
   return out;
 }
 
@@ -414,7 +407,10 @@ function refresh(){
 }
 
 // ---------------------------------------------------------------- 判定
-function mastOf(id){ return (S.mast[id] == null) ? MAST_START : S.mast[id]; }
+function mastOf(id){
+  var raw = (S.mast[id] == null) ? MAST_START : S.mast[id];
+  return Math.min(raw, capOfElement(id));   // 本系/外系决定的上限
+}
 function rateOf(p){
   if (p.r.reduce) return REDUCE_RATE;
   return Math.min(mastOf(p.r.element), capOfElement(p.r.element));
@@ -467,7 +463,7 @@ function attempt(){
   var pity = !r.reduce && S.fails >= PITY_N;
 
   if (!pity && base < 100 && Math.random() * 100 >= base){
-    if (MAST_ON_FAIL > 0 && !r.reduce && !isLocked(target) && mastOf(target) < cap){
+    if (MAST_ON_FAIL > 0 && !r.reduce && mastOf(target) < cap){
       S.mast[target] = Math.min(cap, mastOf(target) + MAST_ON_FAIL);
     }
     S.fails++;
@@ -503,25 +499,21 @@ function attempt(){
   flashNew(at);
   if (S.known.indexOf(target) < 0) S.known.push(target);
 
-  var old = Math.min(mastOf(target), cap);
+  var old = mastOf(target);
   var nm = Math.min(cap, old + MAST_GAIN);
   S.mast[target] = nm;
   S.log.unshift({ type:'element', id:target, from:[a,b], mast:nm, cap:cap });
 
-  if (nm >= 100 && S.mastered.indexOf(target) < 0){
-    S.mastered.push(target);
-    toast('掌握 · ' + ELEMS[target].name + ' 常驻材料池', true);
-  } else if (nm >= cap && cap < 100 && old < cap){
+  if (nm >= cap && cap < 100 && old < cap){
     toast('封顶 · ' + ELEMS[target].name + ' ' + cap + '%', true);
   } else {
     toast('炼成 · ' + ELEMS[target].name + '（' + nm + '%）', true);
   }
 
-  var lockNote = isLocked(target) ? '（' + rankOf().name + '用不了，先囤着）' : '';
   var prog = (nm > old)
     ? ('熟练度 ' + old + '% → ' + nm + '%' + (cap < 100 && nm >= cap ? '　封顶' : ''))
     : ('熟练度 ' + nm + '%' + (cap < 100 ? '（已封顶）' : ''));
-  say('炼成「' + ELEMS[target].name + '」· ' + prog + lockNote, 'ok');
+  say('炼成「' + ELEMS[target].name + '」· ' + prog, 'ok');
   render();
 }
 
@@ -534,14 +526,6 @@ function hexA(hex, a){
 function render(){
   renderPick();
   var rk = rankOf();
-  if (S._rank && S._rank !== rk.name){
-    var unlocked = [];
-    S.ware.forEach(function(id){
-      if (ELEMS[id].tier === rk.matTier && unlocked.indexOf(ELEMS[id].name) < 0) unlocked.push(ELEMS[id].name);
-    });
-    toast('升阶 · ' + rk.name + (unlocked.length ? '　' + unlocked.join(' / ') + ' 现在能用了' : ''), true);
-  }
-  S._rank = rk.name;
 
   renderWare();
 
@@ -570,7 +554,6 @@ function render(){
   if (!p) $('oddsE').textContent = '—';
   else if (p.r.reduce) $('oddsE').textContent = REDUCE_RATE + '%（还原）';
   else if (S.fails >= PITY_N) $('oddsE').textContent = '必定成功（保底）';
-  else if (rateOf(p) >= 100) $('oddsE').textContent = '必定成功';
   else $('oddsE').textContent = rateOf(p) + '%' + (rateOf(p) >= cap && cap < 100 ? '（封顶）' : '');
 
   // 台面提示
@@ -583,7 +566,7 @@ function render(){
     ph.textContent = ELEMS[ids[0]].name + ' + ' + ELEMS[ids[1]].name + ' 没有反应 —— 换一种搭配';
   } else {
     ph.className = 'pairhint good';
-    var capTxt = cap < 100 ? '　上限 ' + cap + '%' : '　可到 100%';
+    var capTxt = '　上限 ' + cap + '%';
     ph.textContent = '会得到「' + (p.r.reduce ? '水（还原）' : ELEMS[p.r.element].name) + '」' + capTxt;
   }
 
@@ -601,7 +584,9 @@ function render(){
 
   $('rank').textContent = rk.name;
   var nx = nextRank();
-  $('rankProg').textContent = nx ? ('再发现 ' + (nx.min - discovered()) + ' 种新元素 → ' + nx.name) : '已到顶';
+  $('rankProg').textContent = nx
+    ? ('掌握 ' + nx.min + ' 个 100% 技能 → ' + nx.name.replace('魔法师','') + '（技能层未实现）')
+    : '已到顶';
   $('cEl').textContent = S.known.length;
   $('cAll').textContent = ALL_ELEMS;
 
@@ -639,16 +624,14 @@ function renderWare(){
   }
   S.ware.forEach(function(id, i){
     var el = ELEMS[id];
-    var locked = isLocked(id);
     var sel = S.slots.some(function(s){ return s && s.src === 'ware' && s.i === i; });
     var d = document.createElement('div');
-    d.className = 'wchip' + (sel ? ' sel' : '') + (locked ? ' locked' : '') + (i === freshIdx ? ' fresh' : '');
+    d.className = 'wchip' + (sel ? ' sel' : '') + (i === freshIdx ? ' fresh' : '');
     d.style.color = el.c;
-    d.style.borderColor = hexA(el.c, locked ? .18 : .45);
+    d.style.borderColor = hexA(el.c, .45);
     d.style.boxShadow = sel ? '' : 'inset 0 0 20px -8px ' + hexA(el.c, .85);
     d.textContent = el.ch;
-    if (locked) d.innerHTML = el.ch + '<span class="lk">锁</span>';
-    d.title = el.name + '（' + tierName(el.tier) + '）' + (locked ? ' · ' + rankNameFor(el.tier) + '才能用' : '');
+    d.title = el.name + '（' + tierName(el.tier) + '）';
     d.onclick = function(){ pick(i); };
     d.oncontextmenu = function(ev){ ev.preventDefault(); discard(i); };
     box.appendChild(d);
@@ -657,28 +640,12 @@ function renderWare(){
 }
 
 function tierName(t){ return ['基础','一级','二级','三级'][t] || '?'; }
-function rankNameFor(t){
-  for (var i = 0; i < RANKS.length; i++) if (RANKS[i].matTier >= t) return RANKS[i].name;
-  return '高级魔法师';
-}
 
+// 元素没有「掌握」：练到上限就停住。上限由本系/外系决定。
 function renderMast(){
   var me = $('masteredList');
-  me.innerHTML = '';
-  if (!S.mastered.length){
-    me.innerHTML = '<span>已掌握：还没有（100% 才算掌握，本系路线封顶 85%）</span>';
-    return;
-  }
-  var span = document.createElement('span');
-  span.textContent = '已掌握：';
-  me.appendChild(span);
-  S.mastered.forEach(function(id){
-    var e = ELEMS[id], lk = isLocked(id);
-    var t = document.createElement('span');
-    t.className = 'mtag';
-    t.innerHTML = '<i style="background:' + e.c + '"></i>' + e.name + (lk ? '<em>高阶才可抽</em>' : '');
-    me.appendChild(t);
-  });
+  me.innerHTML = '元素上限：本系+本系 ' + CAP_SCHOOL_BOTH + '% · 本系+外系 ' +
+    CAP_SCHOOL_MIXED + '% · 纯外系 ' + CAP_EXTERNAL_ONLY + '%（没有 100%）';
 }
 
 function renderLog(){
@@ -701,7 +668,7 @@ function renderLog(){
       d.innerHTML =
         '<div class="dot" style="color:' + e.c + ';background:' + hexA(e.c, .16) + '">' + e.ch + '</div>' +
         '<div class="body"><div class="name">' + e.name +
-        ' <span class="from" style="display:inline">' + (it.mast >= 100 ? '已掌握' : it.mast + '%') + '</span></div>' +
+        ' <span class="from" style="display:inline">' + it.mast + '%</span></div>' +
         '<div class="from">' + from + '</div></div>' +
         (capTag || ('<div class="tag el">' + tierName(e.tier) + '</div>'));
     }
@@ -752,9 +719,11 @@ function renderPick(){
   grid.innerHTML = '';
   SCHOOLS.forEach(function(id){
     var e = ELEMS[id];
-    var canMaster = 0;
+    var withSchool = 0, extOnly = 0;
     PRODUCTS.forEach(function(pid){
-      if (capOfElement(pid, id) >= 100) canMaster++;
+      var c = capOfElement(pid, id);
+      if (c === CAP_SCHOOL_MIXED) withSchool++;
+      else if (c === CAP_EXTERNAL_ONLY) extOnly++;
     });
     var d = document.createElement('div');
     d.className = 'pick-opt';
@@ -763,8 +732,8 @@ function renderPick(){
       '<div class="top"><span class="orb" style="background:' + hexA(e.c, .16) + ';color:' + e.c +
       ';border:1px solid ' + hexA(e.c, .45) + '">' + e.ch + '</span>' +
       '<span class="nm">' + e.name + '系</span></div>' +
-      '<div class="sub">本系「' + e.name + '」无限 · 可掌握 <b>' + canMaster + '/' + PRODUCTS.length +
-      '</b> 种<br>其余 ' + (PRODUCTS.length - canMaster) + ' 种最多练到 ' + CAP_MIXED + '%</div>';
+      '<div class="sub">本系「' + e.name + '」无限 · 带本系 <b>' + withSchool + '/' + PRODUCTS.length +
+      '</b> 条（' + CAP_SCHOOL_MIXED + '%）<br>纯外系 ' + extOnly + ' 条（' + CAP_EXTERNAL_ONLY + '%），元素没有 100%</div>';
     d.onclick = function(){ chooseSchool(id); };
     grid.appendChild(d);
   });
@@ -776,7 +745,6 @@ function chooseSchool(id){
   S.ware = S.ware.filter(function(x){ return x !== id; });  // 本系不进外系仓库
   S.slots = [null, null];
   S.fails = 0;
-  S._rank = null;
   capCache = {};
   refresh();
   render();
@@ -800,7 +768,6 @@ function pickSchool(){
 function pick(i){
   var id = S.ware[i];
   if (id == null) return;
-  if (isLocked(id)) return say('「' + ELEMS[id].name + '」要 ' + rankNameFor(ELEMS[id].tier) + ' 才能用', 'info');
   for (var s = 0; s < 2; s++){
     if (S.slots[s] && S.slots[s].src === 'ware' && S.slots[s].i === i){
       S.slots[s] = null;
@@ -871,18 +838,18 @@ if (_sm) chooseSchool(_sm[1]);
 if (/seed=1/.test(_q)) {
   if (!S.school) chooseSchool('fire');
   S.known = ['fire','water','wind','earth','thunder','blast','metal','ice','poison','sand'];
-  S.mast = { thunder:85, blast:60, metal:70, ice:60, poison:50, sand:60 };
-  S.mastered = ['ice'];
+  S.mast = { thunder:85, blast:75, metal:70, ice:35, poison:35, sand:65 };
   S.ware = ['water','wind','earth','sand','poison','metal'];
   S.slots = [{ src:'school' }, { src:'ware', i:0 }];
   S.log = [
     { type:'element', id:'metal',  from:['earth','fire'], mast:70, cap:85 },
     { type:'element', id:'thunder',from:['fire','water'], mast:85, cap:85 },
-    { type:'element', id:'ice',    from:['water','wind'], mast:100, cap:100 },
+    { type:'element', id:'ice',    from:['water','wind'], mast:35, cap:35 },
     { type:'reduce',  id:'water',  from:['fire','ice'] }
   ];
+  var _t = $('toast'); _t.className = 'toast'; _t.textContent = '';
   render();
-  say('火 + 水 是 85% 封顶 —— 想练满，得凑两个外系', 'info');
+  say('火 + 水 是 85%（本系给了底子）；纯外系只有 35%', 'info');
 }
 
 window.__AL = {
@@ -890,9 +857,11 @@ window.__AL = {
   pickSchool: pickSchool, discard: discard, chooseSchool: chooseSchool,
   RECIPES: RECIPES, ELEMS: ELEMS, rankOf: rankOf, mastOf: mastOf, can: can, pairOf: pairOf,
   capOfElement: capOfElement, capForPair: capForPair, rateOf: rateOf, poolIds: poolIds,
+  skillsMastered: skillsMastered,
   clearCaps: function(){ capCache = {}; }, slotIds: slotIds,
   WARE_CAP: WARE_CAP, ALL_ELEMS: ALL_ELEMS, BASE: BASE, SCHOOLS: SCHOOLS,
-  CAP_MIXED: CAP_MIXED, CAP_FREE_BOTH: CAP_FREE_BOTH, PITY_N: PITY_N,
+  CAP_SCHOOL_BOTH: CAP_SCHOOL_BOTH, CAP_SCHOOL_MIXED: CAP_SCHOOL_MIXED,
+  CAP_EXTERNAL_ONLY: CAP_EXTERNAL_ONLY, PITY_N: PITY_N,
   wareSlot: function(i){ return { src:'ware', i:i }; },
   schoolSlot: function(){ return { src:'school' }; }
 };

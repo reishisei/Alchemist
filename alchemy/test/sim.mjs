@@ -166,51 +166,54 @@ ok(ALL.length === g.ALL_ELEMS, '元素总数对不上');
   ok(SD.slots[0] === null && SD.slots[1] === null, '失败后台面应清空');
 }
 
-// ---------------------------------------------------------------- 六、熟练度上限
+// ---------------------------------------------------------------- 六、熟练度上限（元素永远没有 100%）
 {
-  // 本系参与 → 85 封顶，且永远不能「掌握」
   const g85 = boot(() => 0);
   const S85 = g85.state;
   g85.chooseSchool('fire');
-  ok(g85.capForPair('fire', 'water', 'fire') === 85, '本系+外系 上限应为 85');
-  ok(g85.capForPair('fire', 'fire', 'fire') === 50, '双本系 上限应为 50');
-  ok(g85.capForPair('water', 'wind', 'fire') === 100, '双外系 上限应为 100');
-  ok(g85.capOfElement('thunder') === 85, '电（火+水）在火系下上限应为 85');
-  ok(g85.capOfElement('ice') === 100, '冰（水+风）在火系下上限应为 100');
-  ok(g85.capOfElement('thunder', 'wind') === 100, '电在风系下上限应为 100');
 
+  ok(g85.capForPair('fire', 'fire', 'fire') === 50, '双本系 上限应为 50');
+  ok(g85.capForPair('fire', 'water', 'fire') === 85, '本系+外系 上限应为 85');
+  ok(g85.capForPair('water', 'wind', 'fire') === 35, '双外系 上限应为 35');
+  ok(g85.capOfElement('thunder') === 85, '电（火+水）在火系下上限应为 85');
+  ok(g85.capOfElement('ice') === 35, '冰（水+风）在火系下上限应为 35');
+  ok(g85.capOfElement('thunder', 'wind') === 35, '电（火+水）在风系下是纯外系，上限应为 35');
+
+  // 85% 配方：练到 85 停住，永远不到 100
   for (let i = 0; i < 10; i++) {
     S85.ware = ['water'];
     S85.slots = [g85.schoolSlot(), g85.wareSlot(0)];
     g85.attempt();
   }
   ok(g85.mastOf('thunder') === 85, `火系炼电应停在 85%，实际 ${g85.mastOf('thunder')}`);
-  ok(!S85.mastered.includes('thunder'), '85% 封顶不应进 mastered');
-  S85.slots = [g85.schoolSlot(), g85.wareSlot(0)];
+  ok(g85.mastOf('thunder') < 100, '元素熟练度不应出现 100%');
   S85.ware = ['water'];
+  S85.slots = [g85.schoolSlot(), g85.wareSlot(0)];
   ok(g85.rateOf(g85.pairOf()) === 85, '封顶后成功率应锁在 85%');
 
-  // 双外系 → 可以 100% 掌握
-  const g100 = boot(() => 0);
-  const S100 = g100.state;
-  g100.chooseSchool('wind');
-  for (let i = 0; i < 5; i++) {
-    S100.ware = ['water', 'fire'];
-    S100.slots = [g100.wareSlot(0), g100.wareSlot(1)];
-    g100.attempt();
-  }
-  ok(g100.mastOf('thunder') === 100, `风系炼电应能到 100%，实际 ${g100.mastOf('thunder')}`);
-  ok(S100.mastered.includes('thunder'), '100% 应进 mastered');
-  S100.known = ['fire', 'water', 'wind', 'earth', 'thunder', 'ice', 'sand']; // 中级才抽得到一级
-  ok(g100.poolIds().includes('thunder'), '掌握的元素应进随机池');
+  // 纯外系 35：一上来就是 35，练不动
+  const g35 = boot(() => 0);
+  const S35 = g35.state;
+  g35.chooseSchool('fire');
+  S35.ware = ['water', 'wind'];
+  S35.slots = [g35.wareSlot(0), g35.wareSlot(1)];
+  ok(g35.rateOf(g35.pairOf()) === 35, '纯外系成功率应是 35%');
+  g35.attempt();
+  ok(g35.mastOf('ice') === 35, `纯外系应停在 35%，实际 ${g35.mastOf('ice')}`);
+  ok(S35.log[0].cap === 35, '日志应记下 35% 上限');
+
+  // 随机池只发基础元素，且不含本系
+  const pool = g85.poolIds();
+  ok(pool.every(id => E[id].tier === 0), '随机池只应有基础元素');
+  ok(pool.every(id => id !== 'fire'), '随机池不应含本系');
 }
 
 // ---------------------------------------------------------------- 七、连败保底
 {
+  // 85% 配方连败两次后必成
   const gp = boot(() => 0.999);
   const SP = gp.state;
   gp.chooseSchool('fire');
-  SP.known = ['fire', 'water', 'wind', 'earth', 'blast', 'ice', 'sand']; // 中级，电不再被锁
   SP.ware = ['water', 'water', 'water'];
   for (let i = 0; i < 2; i++) {
     SP.slots = [gp.schoolSlot(), gp.wareSlot(0)];
@@ -225,6 +228,24 @@ ok(ALL.length === g.ALL_ELEMS, '元素总数对不上');
   ok(SP.known.includes('thunder'), '第 3 次应保底成功');
   ok(SP.fails === 0, '成功后失败计数应清零');
   ok(SP.ware.length === 1 && SP.ware[0] === 'thunder', `成功应 -2 +1，实际 ${SP.ware.join(',')}`);
+
+  // 35% 纯外系也一样：连败两次后必成
+  const ge = boot(() => 0.999);
+  const SE = ge.state;
+  ge.chooseSchool('fire');
+  SE.ware = ['water', 'wind', 'water', 'wind'];
+  SE.slots = [ge.wareSlot(0), ge.wareSlot(1)];
+  ge.attempt();
+  ok(SE.ware.length === 2 && !SE.known.includes('ice'), '35% 第一次应失败');
+  SE.ware = ['water', 'wind'];
+  SE.slots = [ge.wareSlot(0), ge.wareSlot(1)];
+  ge.attempt();
+  ok(SE.known.includes('ice') === false, '35% 第二次应失败');
+  SE.ware = ['water', 'wind'];
+  SE.slots = [ge.wareSlot(0), ge.wareSlot(1)];
+  ge.attempt();
+  ok(SE.known.includes('ice'), '35% 第 3 次应保底成功');
+  ok(ge.mastOf('ice') === 35, '保底成功也不该把纯外系练过 35%');
 }
 
 // ---------------------------------------------------------------- 八、还原
@@ -243,15 +264,22 @@ ok(ALL.length === g.ALL_ELEMS, '元素总数对不上');
   ok(gr.rateOf(gr.pairOf()) === 75, '还原成功率应固定 75%');
 }
 
-// ---------------------------------------------------------------- 九、阶级
+// ---------------------------------------------------------------- 九、升阶只看技能 + 去掉等级锁
 {
   const gR = boot(() => 0);
   const SR = gR.state;
   ok(gR.rankOf().name === '见习魔法师', '初始应见习');
-  SR.known = ['fire', 'water', 'wind', 'earth', 'thunder', 'blast', 'metal'];
-  ok(gR.rankOf().name === '中级魔法师', `4基础+3新发现应为中级，实际 ${gR.rankOf().name}`);
-  SR.known = SR.known.concat(['ice', 'poison', 'sand', 'glass', 'mud']);
-  ok(gR.rankOf().name === '高级魔法师', `4基础+7新发现应为高级，实际 ${gR.rankOf().name}`);
+  ok(gR.skillsMastered() === 0, '技能层未实现，掌握数应为 0');
+
+  // 把 22 种元素全发现，阶级也不该变 —— 元素不算升阶进度
+  SR.known = Object.keys(E);
+  ok(gR.rankOf().name === '见习魔法师', `元素全发现也应还是见习，实际 ${gR.rankOf().name}`);
+
+  // 没有素材等级锁：高阶元素也能直接上台
+  SR.school = 'fire';
+  SR.ware = ['glass'];
+  gR.pick(0);
+  ok(SR.slots[0] && SR.slots[0].src === 'ware', '二级元素应能直接放上台（无等级锁）');
 }
 
 // ---------------------------------------------------------------- 十、全流程节奏（真随机，模拟玩家）
@@ -306,7 +334,7 @@ while (acts < 4000 && S2.known.length < ALL.length) {
 console.log(fails === 0
   ? `PASS  元素 ${ALL.length} · 配方 ${Object.keys(R).length} 条 · 全部可达 · 选系/上限/保底`
   : `FAIL  ${fails} 项`);
-console.log(`节奏：${acts} 次操作 → 发现 ${S2.known.length}/${ALL.length} 种，掌握 ${S2.mastered.length}；平均 ${marks ? (acts / marks).toFixed(1) : '—'} 次/种`);
+console.log(`节奏：${acts} 次操作 → 发现 ${S2.known.length}/${ALL.length} 种；平均 ${marks ? (acts / marks).toFixed(1) : '—'} 次/种`);
 if (S2.known.length < ALL.length) {
   console.log('  未完成：缺', ALL.filter(x => !S2.known.includes(x)).join(',') || '—');
 }
