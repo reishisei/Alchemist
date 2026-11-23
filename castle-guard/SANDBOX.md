@@ -1,6 +1,7 @@
 # 守城 · 沙盒 v0.3（实验）
 
-单文件：`sandbox.html`。**先玩这个**，v0.2 的三路版本保留在 `index.html` 做对比。
+单文件：`sandbox.html`。**双击就能玩，不需要 Node / 服务器 / 构建。**
+`node .../test/sandbox.mjs` 只是自动化验证，不玩也可以。v0.2 的三路版本保留在 `index.html` 做对比。
 
 ![标题](shots/25-sandbox-title.png)
 
@@ -35,7 +36,7 @@
 ?wall=50&seed=3                            # 改城墙 / 换随机种子
 ```
 
-## 验证
+## 自动化验证（不是玩）
 
 ```bash
 node castle-guard/test/sandbox.mjs
