@@ -13,6 +13,7 @@ function makeEl() {
     className: '', textContent: '', style: {}, disabled: false, title: '',
     onclick: null, oncontextmenu: null, children: [],
     appendChild(c) { this.children.push(c); },
+    replaceChildren() { this.children.length = 0; },
     classList: { add() {}, remove() {} }
   };
   let _html = '';
@@ -26,7 +27,7 @@ function makeEl() {
 function boot(randomFn) {
   const nodes = new Map();
   const sandbox = {
-    console, Date, JSON,
+    console, Date, JSON, URLSearchParams,
     Math: Object.create(Math),
     document: {
       getElementById(id) { if (!nodes.has(id)) nodes.set(id, makeEl()); return nodes.get(id); },

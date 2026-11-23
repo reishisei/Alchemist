@@ -29,6 +29,7 @@ function makeEl() {
     getContext: () => ctx, querySelectorAll: () => [],
     addEventListener: () => {}, appendChild: () => {}, setAttribute: () => {},
     style: {}, onclick: null,
+    replaceChildren() {},
   };
   return el;
 }
@@ -40,6 +41,7 @@ const sandbox = {
   document: { getElementById: () => makeEl(), createElement: () => makeEl(),
               addEventListener: () => {} },
   location: { search: '' },
+  URLSearchParams,
   requestAnimationFrame: () => {},
   setTimeout, clearTimeout,
   addEventListener: () => {},

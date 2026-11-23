@@ -597,7 +597,7 @@ function render(){
 
 function renderWare(){
   var box = $('ware');
-  box.innerHTML = '';
+  box.replaceChildren();
   if (!S.school){
     box.innerHTML = '<div class="ware-empty">先选一个元素系</div>';
     $('cap').textContent = '0/' + WARE_CAP;
@@ -651,7 +651,7 @@ function renderMast(){
 function renderLog(){
   var box = $('log');
   if (!S.log.length){ box.innerHTML = '<div class="log-empty">还没有记录</div>'; return; }
-  box.innerHTML = '';
+  box.replaceChildren();
   S.log.forEach(function(it){
     var d = document.createElement('div');
     d.className = 'entry';
@@ -678,7 +678,7 @@ function renderLog(){
 
 function renderCodex(){
   var box = $('codex');
-  box.innerHTML = '';
+  box.replaceChildren();
   var groups = [[0,'基础'],[1,'一级'],[2,'二级'],[3,'三级']];
   groups.forEach(function(g){
     var col = document.createElement('div');
@@ -716,7 +716,7 @@ function renderPick(){
   pickerBuilt = true;
 
   var grid = $('pickGrid');
-  grid.innerHTML = '';
+  grid.replaceChildren();
   SCHOOLS.forEach(function(id){
     var e = ELEMS[id];
     var withSchool = 0, extOnly = 0;
@@ -831,20 +831,25 @@ render();
 
 // ?school=fire            —— 直接进这个系（截图 / 调试用）
 // ?seed=1                 —— 预置一局中盘状态
-var _q = (typeof location !== 'undefined') ? location.search : '';
-var _sm = _q.match(/school=(fire|water|wind|earth)/);
-if (_sm) chooseSchool(_sm[1]);
+var _q = (typeof location !== 'undefined') ? new URLSearchParams(location.search) : null;
+var _sm = _q && _q.get('school');
+if (_sm && SCHOOLS.indexOf(_sm) >= 0) chooseSchool(_sm);
 
-if (/seed=1/.test(_q)) {
+if (_q && _q.get('seed') === '1') {
   if (!S.school) chooseSchool('fire');
   S.known = ['fire','water','wind','earth','thunder','blast','metal','ice','poison','sand'];
   S.mast = { thunder:85, blast:75, metal:70, ice:35, poison:35, sand:65 };
-  S.ware = ['water','wind','earth','sand','poison','metal'];
+  S.ware = ['water','wind','earth','sand','poison','metal'].filter(function(id){ return id !== S.school; });
   S.slots = [{ src:'school' }, { src:'ware', i:0 }];
+  // 日志里的上限按当前选系现算，换系打开 seed 也不会自相矛盾
+  function _seeded(id, from, want){
+    var cap = capOfElement(id);
+    return { type:'element', id:id, from:from, mast:Math.min(want, cap), cap:cap };
+  }
   S.log = [
-    { type:'element', id:'metal',  from:['earth','fire'], mast:70, cap:85 },
-    { type:'element', id:'thunder',from:['fire','water'], mast:85, cap:85 },
-    { type:'element', id:'ice',    from:['water','wind'], mast:35, cap:35 },
+    _seeded('metal',  ['earth','fire'], 70),
+    _seeded('thunder',['fire','water'], 85),
+    _seeded('ice',    ['water','wind'], 35),
     { type:'reduce',  id:'water',  from:['fire','ice'] }
   ];
   var _t = $('toast'); _t.className = 'toast'; _t.textContent = '';

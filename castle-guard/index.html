@@ -216,7 +216,7 @@ function startLevel(i) {
   if (sup) S.elems[sup] = Math.min(ELEM_CAP, (S.elems[sup] || 0) + 1);
   S.toast = { text: LEVELS[i].name + '　·　' + LEVELS[i].tip, t: 2.8 };
   overlay.className = '';
-  overlay.innerHTML = '';
+  overlay.replaceChildren();
 }
 
 function toast(text) {
@@ -468,7 +468,7 @@ function showTitle() {
     '</div>';
   el('startBtn').onclick = function () {
     overlay.className = '';
-    overlay.innerHTML = '';
+    overlay.replaceChildren();
     resetGame();
     startLevel(0);
   };
@@ -518,7 +518,7 @@ function showLose() {
       lines +
       '<p class="dim" style="margin-top:14px">提示：幻影靠照明弹实体化，再生靠焚风压住回复，疾行靠泥沼拖住。</p>' +
       '<button class="btn" id="againBtn">再来一局</button></div>';
-  el('againBtn').onclick = function () { overlay.className = ''; overlay.innerHTML = ''; resetGame(); startLevel(0); };
+  el('againBtn').onclick = function () { overlay.className = ''; overlay.replaceChildren(); resetGame(); startLevel(0); };
 }
 
 function showWin() {
@@ -529,7 +529,7 @@ function showWin() {
       '<p class="dim">五关全过 · 城墙剩余 ' + Math.round(S.wall) + '</p>' +
       lines +
       '<button class="btn" id="againBtn2">再来一局</button></div>';
-  el('againBtn2').onclick = function () { overlay.className = ''; overlay.innerHTML = ''; resetGame(); startLevel(0); };
+  el('againBtn2').onclick = function () { overlay.className = ''; overlay.replaceChildren(); resetGame(); startLevel(0); };
 }
 
 // ---------------------------------------------------------------- 绘制
@@ -918,22 +918,25 @@ showTitle();
 
 // ?autostart=1&level=0&ff=6 —— 调试/截图用：直接开局并快进 N 秒
 (function () {
-  var qs = (typeof location !== 'undefined' && location.search) ? location.search : '';
-  if (qs.indexOf('autostart') < 0) return;
-  var lv = /level=(\d+)/.exec(qs);
+  if (typeof location === 'undefined') return;
+  var qs = new URLSearchParams(location.search);
+  if (!qs.has('autostart')) return;
+  var lv = parseInt(qs.get('level'), 10);
   resetGame();
-  var wl = /wall=(\d+)/.exec(qs);
-  if (wl) S.wall = parseInt(wl[1], 10);
-  startLevel(lv ? parseInt(lv[1], 10) : 0);
-  var ff = /ff=(\d+)/.exec(qs);
-  if (ff) {
-    var n = parseInt(ff[1], 10) * 60;
+  var wl = parseInt(qs.get('wall'), 10);
+  if (isFinite(wl)) S.wall = wl;
+  startLevel(isFinite(lv) ? Math.min(LEVELS.length - 1, Math.max(0, lv)) : 0);
+  var ff = parseInt(qs.get('ff'), 10);
+  if (isFinite(ff)) {
+    var n = ff * 60;
     for (var i = 0; i < n; i++) update(1 / 60);
   }
-  var dbgFx = /fx=(light|scorch|mud)/.exec(qs);
-  if (dbgFx) S.fx[dbgFx[1]] = 99;
-  var dbgCraft = /craft=(light|scorch|mud)/.exec(qs);
-  if (dbgCraft) S.channel = { id: dbgCraft[1], t: 0.55, dur: 1.2 };
+  var dbgFx = qs.get('fx');
+  if (dbgFx === 'light' || dbgFx === 'scorch' || dbgFx === 'mud') S.fx[dbgFx] = 99;
+  var dbgCraft = qs.get('craft');
+  if (dbgCraft === 'light' || dbgCraft === 'scorch' || dbgCraft === 'mud') {
+    S.channel = { id: dbgCraft, t: 0.55, dur: 1.2 };
+  }
 })();
 
 requestAnimationFrame(frame);

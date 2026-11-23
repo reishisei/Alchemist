@@ -57,6 +57,21 @@ PASS  元素 22 · 配方 19 条 · 全部可达 · 选系/上限/保底
 
 ---
 
+## 工具（可选）
+
+[Modern Web Guidance](https://developer.chrome.com/docs/modern-web-guidance) —— Google Chrome 的 Web 现代写法指南，
+能扫出仓库里可以换成原生 Web API 的旧写法：
+
+```bash
+./tools/mwg.sh legacy-scan .        # 静态扫描（0 findings 为干净）
+./tools/mwg.sh search "dialog animation"
+./tools/mwg.sh retrieve js          # 取整份指南
+```
+
+> 本机全局 `~/.npm` 里有 root 拥有的缓存文件，脚本已把 npm cache 指到临时目录。
+
+---
+
 ## 状态
 
 | 层 | 状态 |
