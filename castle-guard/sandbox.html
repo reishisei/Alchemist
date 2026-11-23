@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>守城 · 沙盒 v0.3</title>
+<title>守城 · 沙盒 v0.4</title>
 <style>
   :root{ --bg:#0b1018; --panel:#131c29; --ink:#e8eef7; --muted:#7d8ca3; --gold:#e2c14a; }
   *{box-sizing:border-box}
@@ -15,7 +15,7 @@
   #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(7,10,16,.88);border-radius:14px;}
   #overlay.show{display:flex;}
-  .card{width:700px;padding:32px 36px;background:var(--panel);border:1px solid #223047;
+  .card{width:760px;padding:32px 36px;background:var(--panel);border:1px solid #223047;
     border-radius:16px;box-shadow:0 30px 80px rgba(0,0,0,.55);}
   .card h1{font-size:27px;margin:0 0 8px;letter-spacing:.02em;}
   .card h2{font-size:21px;margin:0 0 8px;}
@@ -30,10 +30,10 @@
     background:#0f1826;cursor:pointer;transition:.15s;}
   .ucard:hover,.ecard:hover{border-color:var(--gold);transform:translateY(-3px);}
   .ucard b,.ecard b{display:block;font-size:15.5px;margin-bottom:6px;color:var(--gold);}
-  .ucard span,.ecard span{font-size:12.5px;color:var(--muted);line-height:1.6;}
+  .ucard span,.ecard span{font-size:12.5px;color:var(--muted);line-height:1.6;display:block;}
   .ecard .orb{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
     justify-content:center;font-weight:700;font-size:14px;margin-bottom:8px;}
-  .btn{display:inline-block;margin-top:20px;padding:10px 22px;border-radius:10px;
+  .btn{display:inline-block;margin-top:20px;padding:11px 26px;border-radius:10px;
     background:var(--gold);color:#1a1405;font-weight:700;cursor:pointer;border:none;font-size:15px;}
   .btn:hover{filter:brightness(1.08)}
 </style>
@@ -59,6 +59,7 @@ var TURRET = { x: 480, y: 604 };
 var BASE_RANGE = 560;
 var SHOT_SPEED = 920;
 var MAX_WAVE = 15;
+var STACK_MAX = 5;
 
 var BASE = ['fire', 'water', 'earth', 'wind'];
 
@@ -68,14 +69,12 @@ var ELEMS = {
   water:   { name:'水',   ch:'水', c:'#4aa3ff', tier:0 },
   wind:    { name:'风',   ch:'风', c:'#5ad2b0', tier:0 },
   earth:   { name:'土',   ch:'土', c:'#d4a72c', tier:0 },
-
   thunder: { name:'电',   ch:'电', c:'#ffe14a', tier:1 },
   blast:   { name:'爆',   ch:'爆', c:'#ff6b3d', tier:1 },
   metal:   { name:'金属', ch:'金', c:'#b9c3cf', tier:1 },
   ice:     { name:'冰',   ch:'冰', c:'#8fdcff', tier:1 },
   poison:  { name:'毒',   ch:'毒', c:'#7ed957', tier:1 },
   sand:    { name:'沙',   ch:'沙', c:'#e0c48a', tier:1 },
-
   glass:   { name:'玻璃', ch:'璃', c:'#9fe8d8', tier:2 },
   mud:     { name:'泥',   ch:'泥', c:'#9c7f5b', tier:2 },
   molten:  { name:'熔金', ch:'熔', c:'#ffa04d', tier:2 },
@@ -83,7 +82,6 @@ var ELEMS = {
   smoke:   { name:'烟',   ch:'烟', c:'#8d97a3', tier:2 },
   magnet:  { name:'磁',   ch:'磁', c:'#b06bd6', tier:2 },
   vapor:   { name:'汽',   ch:'汽', c:'#cfd8e4', tier:2 },
-
   frost:   { name:'霜雷', ch:'霖', c:'#a8e0ff', tier:3 },
   magstorm:{ name:'磁暴', ch:'霎', c:'#c78bff', tier:3 },
   acidsteel:{name:'蚀钢', ch:'蚀', c:'#a5d94a', tier:3 },
@@ -102,42 +100,44 @@ var RECIPES = {
 };
 var REDUCE = { 'fire+ice': 1 };
 
-// 每个元素的普攻行为（低阶沙盒只到二级）
-// splash 范围 / chain 链数 / pierce 穿透 / slow 减速 / burn 灼烧 / dot 中毒 / knock 击退 / amp 易伤
-var FORMS = {
-  fire:    { dmg:11, rate:0.42, splash:34, burn:{dps:4,t:3},   ult:'nova',   color:'#ff7a45' },
-  water:   { dmg:9,  rate:0.34, slow:{amt:.35,t:2},             ult:'wave',   color:'#4aa3ff' },
-  wind:    { dmg:6,  rate:0.30, chain:2,                       ult:'vortex', color:'#5ad2b0' },
-  earth:   { dmg:19, rate:0.74, knock:26,                      ult:'quake',  color:'#d4a72c' },
-  thunder: { dmg:8,  rate:0.32, chain:3,                       ult:'vortex', color:'#ffe14a' },
-  blast:   { dmg:13, rate:0.52, splash:58,                     ult:'nova',   color:'#ff6b3d' },
-  metal:   { dmg:12, rate:0.46, pierce:2, amp:.15,             ult:'quake',  color:'#b9c3cf' },
-  ice:     { dmg:8,  rate:0.36, slow:{amt:.45,t:2.2},          ult:'wave',   color:'#8fdcff' },
-  poison:  { dmg:5,  rate:0.30, dot:{dps:6,t:4},               ult:'nova',   color:'#7ed957' },
-  sand:    { dmg:7,  rate:0.34, splash:30, slow:{amt:.2,t:2}, knock:8, ult:'wave', color:'#e0c48a' },
-  glass:   { dmg:13, rate:0.50, splash:50, burn:{dps:5,t:3},   ult:'nova',   color:'#9fe8d8' },
-  mud:     { dmg:10, rate:0.40, splash:36, slow:{amt:.4,t:3},  ult:'wave',   color:'#9c7f5b' },
-  molten:  { dmg:14, rate:0.48, pierce:2, amp:.15, burn:{dps:6,t:3}, ult:'nova', color:'#ffa04d' },
-  rust:    { dmg:12, rate:0.44, pierce:2, amp:.15, slow:{amt:.35,t:2.5}, ult:'quake', color:'#c06b3e' },
-  smoke:   { dmg:6,  rate:0.34, dot:{dps:8,t:4}, splash:26,    ult:'vortex', color:'#8d97a3' },
-  magnet:  { dmg:9,  rate:0.36, chain:2, knock:20,             ult:'vortex', color:'#b06bd6' },
-  vapor:   { dmg:8,  rate:0.34, chain:2, slow:{amt:.3,t:2},    ult:'wave',   color:'#cfd8e4' },
-  frost:   { dmg:10, rate:0.36, chain:2, slow:{amt:.5,t:3},    ult:'wave',   color:'#a8e0ff' },
-  magstorm:{ dmg:12, rate:0.38, chain:3, knock:18,             ult:'vortex', color:'#c78bff' },
-  acidsteel:{dmg:12, rate:0.44, pierce:2, amp:.2, dot:{dps:6,t:4}, ult:'quake', color:'#a5d94a' },
-  ironsand:{ dmg:13, rate:0.46, pierce:2, amp:.15, splash:30,  ult:'quake',  color:'#cbb08a' },
-  frostblast:{dmg:14,rate:0.52, splash:56, slow:{amt:.4,t:3},  ult:'nova',   color:'#ffd6c2' }
+// 四系只有手感差异，没有特性；混合形态沿用"后加元素"的手感
+var BASE_PROFILES = {
+  water: { dmg: 8,  rate: 0.30 },
+  fire:  { dmg: 14, rate: 0.50 },
+  wind:  { dmg: 6,  rate: 0.24 },
+  earth: { dmg: 24, rate: 0.80 }
 };
+
+// 混合形态的特性：每击效果 + 5 层触发
+var TRAITS = {
+  ice:    { name:'冻结', c:'#8fdcff', perHit:{ type:'slow', amt:.2,  t:.8 }, proc:{ type:'freeze',     val:1.0 } },
+  thunder:{ name:'爆发', c:'#ffe14a', perHit:null,                          proc:{ type:'burst',      val:1.5 } },
+  poison: { name:'中毒', c:'#7ed957', perHit:{ type:'dot', dps:2, t:3 },    proc:{ type:'poisonNova',  val:8   } },
+  blast:  { name:'爆炸', c:'#ff6b3d', perHit:null,                          proc:{ type:'explosion',   val:2.0 } },
+  metal:  { name:'破甲', c:'#b9c3cf', perHit:null,                          proc:{ type:'break',      val:.3  } },
+  sand:   { name:'击退', c:'#e0c48a', perHit:null,                          proc:{ type:'shove',      val:40  } }
+};
+
+// 第三元素 = 融合领域；普攻形态不变
+var DOMAINS = {
+  frost:     { name:'霜雷领域', c:'#a8e0ff', desc:'链雷 3 个目标 + 短麻痹' },
+  frostblast:{ name:'霜爆领域', c:'#ffd6c2', desc:'爆炸 + 给周围叠冰层' },
+  magstorm:  { name:'磁暴领域', c:'#c78bff', desc:'把怪拉向中心 + 伤害' },
+  acidsteel: { name:'蚀钢领域', c:'#a5d94a', desc:'全场中毒 + 破甲' },
+  smoke:     { name:'烟幕领域', c:'#8d97a3', desc:'全场减速 + 持续伤害' }
+};
+function domainOf(id) {
+  return DOMAINS[id] || { name: ELEMS[id].name + '领域', c: ELEMS[id].c, desc: '范围伤害 + 减速' };
+}
 
 var TYPES = {
   grunt:   { name:'兵', hp:55,  spd:38, breach:6,  r:14, color:'#d8613c' },
   phantom: { name:'影', hp:70,  spd:44, breach:7,  r:15, color:'#8f7bd6', dr:.5 },
   regen:   { name:'生', hp:135, spd:30, breach:5,  r:18, color:'#3fa574', heal:5 },
-  runner:  { name:'疾', hp:52,  spd:88, breach:9,  r:12, color:'#e2c14a' },
-  boss:    { name:'攻城兽', hp:900, spd:16, breach:35, r:34, color:'#c0392b', boss:true }
+  runner:  { name:'疾', hp:52,  spd:100, breach:9, r:12, color:'#e2c14a' },
+  boss:    { name:'攻城兽', hp:1100, spd:18, breach:35, r:34, color:'#c0392b', boss:true }
 };
 
-// 15 波：5/10 是幕末，15 是 Boss
 var WAVES = [
   { grunt:3 },
   { grunt:4, phantom:1 },
@@ -156,8 +156,10 @@ var WAVES = [
   { boss:1, grunt:4 }
 ];
 
-var UPGRADE_WAVES = [2, 4, 7, 9, 12, 14];
-var ELEMENT_WAVES = [5, 10];
+var ULT = {
+  water:'wave', fire:'nova', wind:'vortex', earth:'quake',
+  ice:'wave', thunder:'vortex', poison:'nova', blast:'nova', metal:'quake', sand:'wave'
+};
 
 // ---------------------------------------------------------------- 状态
 var S = null;
@@ -173,21 +175,24 @@ function mulberry32(a) {
 }
 
 function newState(el, seed) {
+  var start = el || 'water';
   return {
     scene: 'title',
     wave: 1,
     maxWave: MAX_WAVE,
     wall: 100, wallMax: 100,
-    element: el || null,
-    form: el || null,
-    player: {
-      dmgMul: 1, rateMul: 1, rangeMul: 1, splashMul: 1,
-      slowMul: 1, dotMul: 1, knockMul: 1, ampMul: 1,
-      pierceBonus: 0, chainBonus: 0, chargeMax: 20
+    element: start,
+    form: start,
+    formProfile: start,
+    domain: null,
+    domainTimer: 0,
+    mods: {
+      dmgMul: 1, rateMul: 1, rangeMul: 1, chargeMax: 20,
+      stacksPerHit: 1, procPower: 1, procDur: 1, decayDelay: 3, perHitMul: 1,
+      domainPower: 1, domainCd: 6, domainRadius: 1
     },
     monsters: [], shots: [], spawns: [], impacts: [], pops: [],
     waveT: 0, fireTimer: 0.4, charge: 0, mark: null, paused: false,
-    nextTimer: 0,
     stats: { kills: 0, leaks: 0, shots: 0, ults: 0, upgrades: [] },
     rng: mulberry32(seed || 1),
     nextId: 1,
@@ -198,29 +203,18 @@ function newState(el, seed) {
   };
 }
 
-function elementTier(id) { return ELEMS[id] ? ELEMS[id].tier : 0; }
-
 function profile() {
-  var p = FORMS[S.form], pl = S.player;
+  var base = BASE_PROFILES[S.formProfile] || BASE_PROFILES.water;
   return {
-    id: S.form,
-    name: ELEMS[S.form].name,
-    tier: ELEMS[S.form].tier,
-    color: p.color,
-    dmg: p.dmg * pl.dmgMul,
-    rate: p.rate * pl.rateMul,
-    range: BASE_RANGE * pl.rangeMul,
-    splash: (p.splash || 0) * pl.splashMul,
-    pierce: (p.pierce || 0) + pl.pierceBonus,
-    chain: (p.chain || 0) + pl.chainBonus,
-    slow: p.slow ? { amt: Math.min(.8, p.slow.amt * pl.slowMul), t: p.slow.t } : null,
-    burn: p.burn ? { dps: p.burn.dps * pl.dotMul, t: p.burn.t } : null,
-    dot: p.dot ? { dps: p.dot.dps * pl.dotMul, t: p.dot.t } : null,
-    knock: (p.knock || 0) * pl.knockMul,
-    amp: (p.amp || 0) * pl.ampMul,
-    ult: p.ult
+    dmg: base.dmg * S.mods.dmgMul,
+    rate: base.rate * S.mods.rateMul,
+    range: BASE_RANGE * S.mods.rangeMul,
+    color: ELEMS[S.form].c,
+    trait: TRAITS[S.form] || null
   };
 }
+
+function tierName(t) { return ['基础', '一级', '二级', '三级'][t] || '?'; }
 
 // ---------------------------------------------------------------- 流程
 function startRun(el, seed) {
@@ -244,7 +238,7 @@ function startWave(n) {
   S.paused = false;
   S.choiceType = null;
   S.choices = [];
-  S.toast = { text: '第 ' + n + ' 波 · ' + ELEMS[S.form].name + '（' + tierName(elementTier(S.form)) + '）', t: 2.0 };
+  S.toast = { text: '第 ' + n + ' 波 · ' + ELEMS[S.form].name + '（' + tierName(ELEMS[S.form].tier) + '）', t: 2.0 };
   overlay.className = '';
   overlay.replaceChildren();
 }
@@ -270,12 +264,13 @@ function makeSpawns(n) {
 
 function spawn(o) {
   var T = TYPES[o.type];
-  var mul = 1 + (S.wave - 1) * 0.07;
+  var mul = 1 + (S.wave - 1) * 0.12;
   var hp = Math.round(T.hp * mul);
   S.monsters.push({
     id: S.nextId++, type: o.type, x: o.x, y: SPAWN_Y,
     hp: hp, max: hp, hurt: 0, dead: false,
-    slowT: 0, slowAmt: 0, amp: 0, ampT: 0, burn: null, dot: null,
+    slowT: 0, slowAmt: 0, amp: 0, ampT: 0, dot: null,
+    stacks: 0, stackT: 0, decayT: 0, procCd: 0, frozenT: 0,
     boss: !!T.boss
   });
 }
@@ -306,72 +301,67 @@ function inRange(m, range) {
   return dx * dx + dy * dy <= range * range;
 }
 
-function aimPoint(t, p) {
+function aimPoint(t) {
   var spd = TYPES[t.type].spd * (t.slowT > 0 ? (1 - t.slowAmt) : 1);
-  var px = t.x, py = t.y;
+  var py = t.y;
   for (var n = 0; n < 3; n++) {
-    var dx = px - TURRET.x, dy = py - TURRET.y;
+    var dx = t.x - TURRET.x, dy = py - TURRET.y;
     var d = Math.sqrt(dx * dx + dy * dy) || 1;
-    var tt = d / SHOT_SPEED;
-    py = t.y + spd * tt;
-    px = t.x;
+    py = t.y + spd * (d / SHOT_SPEED);
   }
-  return { x: px, y: py };
+  return { x: t.x, y: py };
 }
 
 function fire(t) {
   var p = profile();
-  var ap = aimPoint(t, p);
+  var ap = aimPoint(t);
   var dx = ap.x - TURRET.x, dy = ap.y - TURRET.y;
   var d = Math.sqrt(dx * dx + dy * dy) || 1;
   S.shots.push({
     x: TURRET.x, y: TURRET.y - 22,
     px: TURRET.x, py: TURRET.y - 22,
     vx: dx / d * SHOT_SPEED, vy: dy / d * SHOT_SPEED,
-    dmg: p.dmg, splash: p.splash, pierce: p.pierce, chain: p.chain,
-    slow: p.slow, burn: p.burn, dot: p.dot, knock: p.knock, amp: p.amp,
-    color: p.color, hits: {}
+    dmg: p.dmg, color: p.color, dead: false
   });
   S.stats.shots++;
   S.charge++;
-  if (S.charge >= S.player.chargeMax) {
+  if (S.charge >= S.mods.chargeMax) {
     S.charge = 0;
-    ultimate(t, p);
+    ultimate(t);
   }
 }
 
-function ultimate(t, p) {
+function ultimate(t) {
+  var p = profile();
+  var kind = ULT[S.form] || 'nova';
+  var dmg = 30 + p.dmg * 2.2;
   S.stats.ults++;
   S.flash = 0.4;
-  var tierMul = 1 + p.tier * 0.3;
   var list = S.monsters.slice();
   for (var i = 0; i < list.length; i++) {
     var m = list[i];
     if (m.dead) continue;
     var dx = m.x - t.x, dy = m.y - t.y;
     var dist = Math.sqrt(dx * dx + dy * dy);
-    var hit = false, dmg = 0;
-    if (p.ult === 'nova' && dist < 165) { hit = true; dmg = 55 * tierMul; m.burn = { dps: 5 * S.player.dotMul, t: 3 }; }
-    else if (p.ult === 'wave' && Math.abs(m.y - t.y) < 95) { hit = true; dmg = 42 * tierMul; m.y = Math.max(SPAWN_Y, m.y - 30); }
-    else if (p.ult === 'vortex' && dist < 185) { hit = true; dmg = 38 * tierMul; m.x += (t.x - m.x) * 0.5; m.y = Math.max(SPAWN_Y, m.y - 12); }
-    else if (p.ult === 'quake') { hit = true; dmg = 30 * tierMul; m.y = Math.max(SPAWN_Y, m.y - 22); }
+    var hit = false;
+    if (kind === 'nova' && dist < 160) hit = true;
+    else if (kind === 'wave' && Math.abs(m.y - t.y) < 95) hit = true;
+    else if (kind === 'vortex' && dist < 185) hit = true;
+    else if (kind === 'quake') hit = true;
     if (hit) {
       m.hp -= dmg * (TYPES[m.type].dr || 1) * (1 + (m.amp || 0));
       m.hurt = 0.16;
+      if (kind === 'wave' || kind === 'quake') m.y = Math.max(SPAWN_Y, m.y - 24);
+      if (kind === 'vortex') m.x += (t.x - m.x) * 0.45;
       if (m.hp <= 0) killMonster(m);
     }
   }
-  S.impacts.push({ x: t.x, y: t.y, t: 0.55, max: 0.55, r: p.ult === 'quake' ? 220 : 150, color: p.color, ult: true });
+  S.impacts.push({ x: t.x, y: t.y, t: 0.55, max: 0.55, r: kind === 'quake' ? 220 : 155, color: p.color, ult: true });
   S.pops.push({ x: t.x, y: t.y - 30, text: '元素爆发', t: 1.1, color: p.color });
 }
 
 function update(dt) {
   if (!S) return;
-  if (S.scene === 'between') {
-    S.nextTimer -= dt;
-    if (S.nextTimer <= 0) startWave(S.wave + 1);
-    return;
-  }
   if (S.scene !== 'play' || S.paused) return;
   if (dt > 0.06) dt = 0.06;
   S.waveT += dt;
@@ -388,6 +378,15 @@ function update(dt) {
     if (S.pops[pi].t <= 0) S.pops.splice(pi, 1);
   }
 
+  // 领域
+  if (S.domain) {
+    S.domainTimer -= dt;
+    if (S.domainTimer <= 0) {
+      triggerDomain();
+      S.domainTimer = S.mods.domainCd;
+    }
+  }
+
   while (S.spawns.length && S.spawns[0].t <= S.waveT) spawn(S.spawns.shift());
 
   for (var i = 0; i < S.monsters.length; i++) {
@@ -397,12 +396,25 @@ function update(dt) {
     if (m.hurt > 0) m.hurt -= dt;
     if (m.slowT > 0) m.slowT -= dt;
     if (m.ampT > 0) { m.ampT -= dt; if (m.ampT <= 0) m.amp = 0; }
-    if (m.burn) { m.hp -= m.burn.dps * dt; m.burn.t -= dt; if (m.burn.t <= 0) m.burn = null; }
+    if (m.procCd > 0) m.procCd -= dt;
     if (m.dot) { m.hp -= m.dot.dps * dt; m.dot.t -= dt; if (m.dot.t <= 0) m.dot = null; }
     if (T.heal && m.hp < m.max) m.hp = Math.min(m.max, m.hp + T.heal * dt);
 
-    var spd = T.spd * (m.slowT > 0 ? (1 - m.slowAmt) : 1);
-    m.y += spd * dt;
+    // 印记衰减
+    m.stackT += dt;
+    if (m.stackT > S.mods.decayDelay && m.stacks > 0) {
+      m.decayT += dt;
+      if (m.decayT >= 1) { m.stacks--; m.decayT = 0; }
+    } else if (m.stackT <= S.mods.decayDelay) {
+      m.decayT = 0;
+    }
+
+    if (m.frozenT > 0) {
+      m.frozenT -= dt;
+    } else {
+      var spd = T.spd * (m.slowT > 0 ? (1 - m.slowAmt) : 1);
+      m.y += spd * dt;
+    }
 
     if (m.y >= WALL_TOP - 8) {
       S.wall -= T.breach;
@@ -428,18 +440,16 @@ function update(dt) {
     s.x += s.vx * dt; s.y += s.vy * dt;
     if (s.x < -20 || s.x > W + 20 || s.y < -20 || s.y > H + 20) { S.shots.splice(j, 1); continue; }
 
-    var removed = false;
+    var hit = false;
     for (var q = 0; q < S.monsters.length; q++) {
       var mm = S.monsters[q];
-      if (mm.dead || s.hits[mm.id]) continue;
+      if (mm.dead) continue;
       if (segDist(s.px, s.py, s.x, s.y, mm.x, mm.y) > TYPES[mm.type].r + 7) continue;
-      s.hits[mm.id] = 1;
       hitMonster(mm, s);
-      if (s.splash > 0) splash(mm, s);
-      if (s.pierce > 0) { s.pierce--; }
-      else { S.shots.splice(j, 1); removed = true; break; }
+      hit = true;
+      break;
     }
-    if (removed) continue;
+    if (hit) S.shots.splice(j, 1);
   }
 
   S.monsters = S.monsters.filter(function (x) { return !x.dead; });
@@ -451,51 +461,155 @@ function hitMonster(m, s) {
   var T = TYPES[m.type];
   m.hp -= s.dmg * (T.dr || 1) * (1 + (m.amp || 0));
   m.hurt = 0.12;
-  if (s.slow) { m.slowAmt = Math.max(m.slowAmt || 0, s.slow.amt); m.slowT = Math.max(m.slowT || 0, s.slow.t); }
-  if (s.burn) { m.burn = { dps: Math.max(m.burn ? m.burn.dps : 0, s.burn.dps), t: Math.max(m.burn ? m.burn.t : 0, s.burn.t) }; }
-  if (s.dot) { m.dot = { dps: Math.max(m.dot ? m.dot.dps : 0, s.dot.dps), t: Math.max(m.dot ? m.dot.t : 0, s.dot.t) }; }
-  if (s.amp) { m.amp = Math.max(m.amp || 0, s.amp); m.ampT = 4; }
-  if (s.knock) m.y = Math.max(SPAWN_Y, m.y - s.knock * (T.boss ? 0.25 : 1));
-  if (s.chain > 0) chain(m, s);
+
+  var tr = TRAITS[S.form];
+  if (tr && tr.perHit) {
+    if (tr.perHit.type === 'slow') {
+      m.slowAmt = Math.max(m.slowAmt || 0, tr.perHit.amt * S.mods.perHitMul);
+      m.slowT = Math.max(m.slowT || 0, tr.perHit.t);
+    } else if (tr.perHit.type === 'dot') {
+      m.dot = { dps: Math.max(m.dot ? m.dot.dps : 0, tr.perHit.dps * S.mods.perHitMul), t: Math.max(m.dot ? m.dot.t : 0, tr.perHit.t) };
+    }
+  }
+  if (tr) addStacks(m, tr);
   if (m.hp <= 0) killMonster(m);
 }
 
-function chain(from, s) {
-  var used = {};
-  used[from.id] = 1;
-  var prev = from;
-  for (var n = 0; n < s.chain; n++) {
-    var best = null, bestD = 170;
-    for (var i = 0; i < S.monsters.length; i++) {
-      var m = S.monsters[i];
-      if (m.dead || used[m.id]) continue;
-      var d = Math.sqrt((m.x - prev.x) * (m.x - prev.x) + (m.y - prev.y) * (m.y - prev.y));
-      if (d < bestD) { bestD = d; best = m; }
-    }
-    if (!best) break;
-    used[best.id] = 1;
-    best.hp -= s.dmg * 0.6 * (TYPES[best.type].dr || 1) * (1 + (best.amp || 0));
-    best.hurt = 0.12;
-    if (s.slow) { best.slowAmt = Math.max(best.slowAmt || 0, s.slow.amt); best.slowT = Math.max(best.slowT || 0, s.slow.t); }
-    if (s.burn) best.burn = { dps: s.burn.dps, t: s.burn.t };
-    if (s.dot) best.dot = { dps: s.dot.dps, t: s.dot.t };
-    S.impacts.push({ x: best.x, y: best.y, t: 0.18, max: 0.18, r: 12, color: s.color });
-    if (best.hp <= 0) killMonster(best);
-    prev = best;
+function addStacks(m, tr) {
+  if (m.procCd > 0) return;
+  m.stacks += S.mods.stacksPerHit;
+  m.stackT = 0;
+  m.decayT = 0;
+  if (m.stacks >= STACK_MAX) {
+    m.stacks = 0;
+    m.procCd = 2;
+    doProc(m, tr);
   }
 }
 
-function splash(from, s) {
+function doProc(m, tr) {
+  var p = profile();
+  var power = S.mods.procPower;
+  var val = tr.proc.val;
+  if (tr.proc.type === 'freeze') {
+    m.frozenT = Math.max(m.frozenT, val * S.mods.procDur * (m.boss ? 0.5 : 1));
+    S.impacts.push({ x: m.x, y: m.y, t: 0.35, max: 0.35, r: 26, color: tr.c, ult: true });
+    S.pops.push({ x: m.x, y: m.y - 24, text: '冻结', t: 0.8, color: tr.c });
+  } else if (tr.proc.type === 'burst') {
+    var dmg = p.dmg * val * power;
+    m.hp -= dmg * (TYPES[m.type].dr || 1) * (1 + (m.amp || 0));
+    areaDamage(m.x, m.y, 70, dmg * 0.5, tr.c, false);
+    S.impacts.push({ x: m.x, y: m.y, t: 0.3, max: 0.3, r: 60, color: tr.c, ult: true });
+    S.pops.push({ x: m.x, y: m.y - 24, text: '爆发', t: 0.8, color: tr.c });
+    if (m.hp <= 0) killMonster(m);
+  } else if (tr.proc.type === 'poisonNova') {
+    areaDamage(m.x, m.y, 85, p.dmg * 0.6, tr.c, true, val * power);
+    S.impacts.push({ x: m.x, y: m.y, t: 0.4, max: 0.4, r: 85, color: tr.c, ult: true });
+    S.pops.push({ x: m.x, y: m.y - 24, text: '毒爆', t: 0.8, color: tr.c });
+  } else if (tr.proc.type === 'explosion') {
+    areaDamage(m.x, m.y, 85, p.dmg * val * power, tr.c, false);
+    S.impacts.push({ x: m.x, y: m.y, t: 0.4, max: 0.4, r: 90, color: tr.c, ult: true });
+    S.pops.push({ x: m.x, y: m.y - 24, text: '爆炸', t: 0.8, color: tr.c });
+  } else if (tr.proc.type === 'break') {
+    m.amp = Math.max(m.amp || 0, val * power);
+    m.ampT = 4 * S.mods.procDur;
+    S.pops.push({ x: m.x, y: m.y - 24, text: '破甲', t: 0.8, color: tr.c });
+  } else if (tr.proc.type === 'shove') {
+    m.y = Math.max(SPAWN_Y, m.y - val * power * (m.boss ? 0.3 : 1));
+    m.slowAmt = Math.max(m.slowAmt || 0, .3);
+    m.slowT = Math.max(m.slowT || 0, 2 * S.mods.procDur);
+    S.pops.push({ x: m.x, y: m.y - 24, text: '击退', t: 0.8, color: tr.c });
+  }
+}
+
+function areaDamage(x, y, r, dmg, color, applyDot, dotDps) {
   for (var i = 0; i < S.monsters.length; i++) {
     var m = S.monsters[i];
-    if (m.dead || m === from) continue;
-    var d = Math.sqrt((m.x - from.x) * (m.x - from.x) + (m.y - from.y) * (m.y - from.y));
-    if (d > s.splash) continue;
-    m.hp -= s.dmg * 0.5 * (TYPES[m.type].dr || 1) * (1 + (m.amp || 0));
-    m.hurt = 0.1;
+    if (m.dead) continue;
+    var d = Math.sqrt((m.x - x) * (m.x - x) + (m.y - y) * (m.y - y));
+    if (d > r) continue;
+    m.hp -= dmg * (TYPES[m.type].dr || 1) * (1 + (m.amp || 0));
+    m.hurt = 0.12;
+    if (applyDot) {
+      m.dot = { dps: Math.max(m.dot ? m.dot.dps : 0, dotDps), t: Math.max(m.dot ? m.dot.t : 0, 4) };
+    }
     if (m.hp <= 0) killMonster(m);
   }
-  S.impacts.push({ x: from.x, y: from.y, t: 0.22, max: 0.22, r: s.splash, color: s.color });
+  if (color) S.impacts.push({ x: x, y: y, t: 0.3, max: 0.3, r: r, color: color });
+}
+
+function triggerDomain() {
+  if (!S.domain) return;
+  var d = domainOf(S.domain);
+  var p = profile();
+  var power = S.mods.domainPower;
+  var radius = 90 * S.mods.domainRadius;
+  var list = S.monsters.slice();
+  var target = null, bestY = -1;
+  for (var i = 0; i < list.length; i++) {
+    if (!list[i].dead && list[i].y > bestY) { bestY = list[i].y; target = list[i]; }
+  }
+  if (!target) return;
+
+  if (S.domain === 'frost') {
+    var hitCount = 0;
+    for (var a = 0; a < list.length && hitCount < 3; a++) {
+      var ma = list[a];
+      if (ma.dead) continue;
+      var da = Math.sqrt((ma.x - target.x) * (ma.x - target.x) + (ma.y - target.y) * (ma.y - target.y));
+      if (da > 190) continue;
+      ma.hp -= (35 + p.dmg) * power * (TYPES[ma.type].dr || 1) * (1 + (ma.amp || 0));
+      ma.hurt = 0.16;
+      ma.frozenT = Math.max(ma.frozenT, 0.4);
+      if (ma.hp <= 0) killMonster(ma);
+      S.impacts.push({ x: ma.x, y: ma.y, t: 0.3, max: 0.3, r: 24, color: d.c, ult: true });
+      hitCount++;
+    }
+  } else if (S.domain === 'frostblast') {
+    areaDamage(target.x, target.y, radius, 60 * power, d.c, false);
+    for (var b = 0; b < list.length; b++) {
+      var mb = list[b];
+      if (mb.dead) continue;
+      var db = Math.sqrt((mb.x - target.x) * (mb.x - target.x) + (mb.y - target.y) * (mb.y - target.y));
+      if (db <= radius) { mb.stacks = Math.min(STACK_MAX - 1, mb.stacks + 1); mb.stackT = 0; }
+    }
+    S.impacts.push({ x: target.x, y: target.y, t: 0.5, max: 0.5, r: radius, color: d.c, ult: true });
+  } else if (S.domain === 'magstorm') {
+    for (var c = 0; c < list.length; c++) {
+      var mc = list[c];
+      if (mc.dead) continue;
+      mc.hp -= 30 * power * (TYPES[mc.type].dr || 1) * (1 + (mc.amp || 0));
+      mc.hurt = 0.14;
+      mc.x += (W / 2 - mc.x) * 0.4;
+      if (mc.hp <= 0) killMonster(mc);
+    }
+    S.impacts.push({ x: W / 2, y: WALL_TOP - 180, t: 0.55, max: 0.55, r: 200, color: d.c, ult: true });
+  } else if (S.domain === 'acidsteel') {
+    for (var e = 0; e < list.length; e++) {
+      var me = list[e];
+      if (me.dead) continue;
+      me.dot = { dps: Math.max(me.dot ? me.dot.dps : 0, 6 * power), t: 4 };
+      me.amp = Math.max(me.amp || 0, .2);
+      me.ampT = 4;
+    }
+    S.impacts.push({ x: W / 2, y: WALL_TOP - 180, t: 0.55, max: 0.55, r: 220, color: d.c, ult: true });
+  } else if (S.domain === 'smoke') {
+    for (var f = 0; f < list.length; f++) {
+      var mf = list[f];
+      if (mf.dead) continue;
+      mf.slowAmt = Math.max(mf.slowAmt || 0, .4);
+      mf.slowT = Math.max(mf.slowT || 0, 3);
+      mf.dot = { dps: Math.max(mf.dot ? mf.dot.dps : 0, 4 * power), t: 3 };
+    }
+    S.impacts.push({ x: W / 2, y: WALL_TOP - 160, t: 0.55, max: 0.55, r: 240, color: d.c, ult: true });
+  } else {
+    areaDamage(target.x, target.y, radius, 40 * power, d.c, false);
+    for (var g = 0; g < list.length; g++) {
+      var mg = list[g];
+      if (!mg.dead) { mg.slowAmt = Math.max(mg.slowAmt || 0, .25); mg.slowT = Math.max(mg.slowT || 0, 2); }
+    }
+  }
+  S.pops.push({ x: target.x, y: target.y - 36, text: d.name, t: 1.0, color: d.c });
 }
 
 function killMonster(m) {
@@ -514,25 +628,30 @@ function segDist(px, py, x, y, cx, cy) {
   return Math.sqrt((cx - qx) * (cx - qx) + (cy - qy) * (cy - qy));
 }
 
-function tierName(t) { return ['基础', '一级', '二级', '三级'][t] || '?'; }
-
-// ---------------------------------------------------------------- 升级
+// ---------------------------------------------------------------- 奖励
 function upgradePool() {
-  var p = FORMS[S.form];
+  var phase = S.wave < 5 ? 'base' : (S.wave < 10 ? 'trait' : 'domain');
   var pool = [
-    { id: 'rate', name: '疾咏', desc: '攻速 +15%', apply: function () { S.player.rateMul *= 0.87; } },
-    { id: 'dmg', name: '锐化', desc: '伤害 +20%', apply: function () { S.player.dmgMul *= 1.2; } },
-    { id: 'range', name: '远望', desc: '射程 +15%', apply: function () { S.player.rangeMul *= 1.15; } },
-    { id: 'wall', name: '修补', desc: '城墙 +15', apply: function () { S.wall = Math.min(S.wallMax, S.wall + 15); } },
-    { id: 'charge', name: '蓄势', desc: '大招充能 -3 次（最低 10）', apply: function () { S.player.chargeMax = Math.max(10, S.player.chargeMax - 3); } }
+    { id: 'dmg',   name: '锐化', desc: '伤害 +15%',        apply: function () { S.mods.dmgMul *= 1.15; } },
+    { id: 'rate',  name: '疾咏', desc: '攻速 +12%',        apply: function () { S.mods.rateMul *= 0.88; } },
+    { id: 'range', name: '远望', desc: '射程 +10%',        apply: function () { S.mods.rangeMul *= 1.1; } }
   ];
-  if (p.splash) pool.push({ id: 'splash', name: '扩散', desc: '范围 +25%', apply: function () { S.player.splashMul *= 1.25; } });
-  if (p.pierce) pool.push({ id: 'pierce', name: '穿甲', desc: '穿透 +1', apply: function () { S.player.pierceBonus += 1; } });
-  if (p.chain) pool.push({ id: 'chain', name: '连锁', desc: '链数 +1', apply: function () { S.player.chainBonus += 1; } });
-  if (p.slow) pool.push({ id: 'slow', name: '缓滞', desc: '减速 +20%', apply: function () { S.player.slowMul *= 1.2; } });
-  if (p.burn || p.dot) pool.push({ id: 'dot', name: '灼蚀', desc: '持续伤害 +50%', apply: function () { S.player.dotMul *= 1.5; } });
-  if (p.knock) pool.push({ id: 'knock', name: '冲击', desc: '击退 +35%', apply: function () { S.player.knockMul *= 1.35; } });
-  if (p.amp) pool.push({ id: 'amp', name: '裂甲', desc: '易伤 +15%', apply: function () { S.player.ampMul *= 1.15; } });
+  if (S.mods.chargeMax > 10) pool.push({ id: 'charge', name: '蓄势', desc: '大招充能 -2 次', apply: function () { S.mods.chargeMax = Math.max(10, S.mods.chargeMax - 2); } });
+  if (S.wall < S.wallMax) pool.push({ id: 'wall', name: '修补', desc: '城墙 +15', apply: function () { S.wall = Math.min(S.wallMax, S.wall + 15); } });
+  if (phase === 'trait') {
+    var tr = TRAITS[S.form];
+    if (tr) {
+      if (S.mods.stacksPerHit < 2) pool.push({ id: 'stack', name: '刻印', desc: '每次命中额外 +1 层（最多 2）', apply: function () { S.mods.stacksPerHit = Math.min(2, S.mods.stacksPerHit + 1); } });
+      pool.push({ id: 'proc', name: '淬炼', desc: tr.name + ' 效果 +30%', apply: function () { S.mods.procPower *= 1.3; } });
+      pool.push({ id: 'procDur', name: '延展', desc: tr.name + ' 持续时间 +30%', apply: function () { S.mods.procDur *= 1.3; } });
+      if (tr.perHit) pool.push({ id: 'perhit', name: '渗透', desc: '每击效果 +50%', apply: function () { S.mods.perHitMul *= 1.5; } });
+      if (S.mods.decayDelay < 6) pool.push({ id: 'decay', name: '滞留', desc: '印记保留 +1 秒', apply: function () { S.mods.decayDelay += 1; } });
+    }
+  } else if (phase === 'domain') {
+    pool.push({ id: 'domainCd', name: '共鸣', desc: '领域间隔 -1 秒（最低 3）', apply: function () { S.mods.domainCd = Math.max(3, S.mods.domainCd - 1); } });
+    pool.push({ id: 'domainPower', name: '领域强化', desc: '领域效果 +30%', apply: function () { S.mods.domainPower *= 1.3; } });
+    pool.push({ id: 'domainRadius', name: '扩张', desc: '领域范围 +20%', apply: function () { S.mods.domainRadius *= 1.2; } });
+  }
   for (var i = pool.length - 1; i > 0; i--) {
     var j = Math.floor(S.rng() * (i + 1));
     var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
@@ -545,8 +664,10 @@ function showUpgrade() {
   S.choiceType = 'upgrade';
   S.choices = upgradePool();
   var html = '<div class="card"><h2>第 ' + S.wave + ' 波结束 · 选一个</h2>' +
-    '<p class="dim">城墙 ' + Math.round(S.wall) + ' / ' + S.wallMax + '　当前形态：' +
-    ELEMS[S.form].name + '（' + tierName(elementTier(S.form)) + '）</p><div class="cards">';
+    '<p class="dim">城墙 ' + Math.round(S.wall) + ' / ' + S.wallMax + '　' +
+    ELEMS[S.form].name + '（' + tierName(ELEMS[S.form].tier) + '）' +
+    (TRAITS[S.form] ? ' · ' + TRAITS[S.form].name : ' · 普通攻击') +
+    (S.domain ? '　领域：' + domainOf(S.domain).name : '') + '</p><div class="cards">';
   for (var i = 0; i < S.choices.length; i++) {
     html += '<div class="ucard" data-i="' + i + '"><b>' + S.choices[i].name + '</b><span>' + S.choices[i].desc + '</span></div>';
   }
@@ -556,8 +677,7 @@ function showUpgrade() {
   var cards = overlay.querySelectorAll('.ucard');
   for (var j = 0; j < cards.length; j++) {
     cards[j].onclick = function (e) {
-      var idx = parseInt(e.currentTarget.getAttribute('data-i'), 10);
-      chooseUpgrade(idx);
+      chooseUpgrade(parseInt(e.currentTarget.getAttribute('data-i'), 10));
     };
   }
 }
@@ -572,51 +692,37 @@ function chooseUpgrade(i) {
   startWave(S.wave + 1);
 }
 
-function elementOptions() {
-  // 低阶沙盒：第二元素只给基础系；第三元素允许基础/一级，避免冰、爆分支没有二级配方而卡死
-  var pool = S.wave >= 10 ? Object.keys(ELEMS) : BASE.slice();
-  var out = [];
-  for (var i = 0; i < pool.length; i++) {
-    var b = pool[i];
-    if (b === S.form) continue;
-    var key = S.form < b ? S.form + '+' + b : b + '+' + S.form;
-    var r = RECIPES[key];
-    if (!r || REDUCE[key] || r === S.form) continue;
-    if (out.some(function (o) { return o.result === r; })) continue;
-    out.push({ type: 'element', base: b, result: r });
-  }
-  // 高形态优先展示，保证能看到三级分支
-  out.sort(function (a, b) { return ELEMS[b.result].tier - ELEMS[a.result].tier; });
-  if (out.length < 3) out.push({ type: 'skip' });
-  return out.slice(0, 3);
-}
-
+// 第 5 波：熔入第二元素
 function showElement() {
   S.scene = 'choice';
   S.choiceType = 'element';
-  S.choices = elementOptions();
-  var html = '<div class="card"><h2>第 ' + S.wave + ' 波结束 · 熔入新元素</h2>' +
-    '<p class="dim">当前形态：' + ELEMS[S.form].name + '（' + tierName(elementTier(S.form)) + '）</p><div class="cards">';
-  for (var i = 0; i < S.choices.length; i++) {
-    var c = S.choices[i];
-    if (c.type === 'skip') {
-      html += '<div class="ucard" data-i="' + i + '"><b>不进化</b><span>保留当前形态，城墙 +15</span></div>';
-    } else {
-      var e = ELEMS[c.result];
-      html += '<div class="ecard" data-i="' + i + '" style="color:' + e.c + '">' +
-        '<div class="orb" style="background:' + hexA(e.c, .16) + ';color:' + e.c + '">' + e.ch + '</div>' +
-        '<b>' + ELEMS[c.base].name + ' + ' + ELEMS[S.form].name + ' → ' + e.name + '</b>' +
-        '<span>' + tierName(e.tier) + '形态：' + effectText(FORMS[c.result]) + '</span></div>';
-    }
+  var opts = [];
+  for (var i = 0; i < BASE.length; i++) {
+    var b = BASE[i];
+    if (b === 'water') continue;
+    var key = b < 'water' ? b + '+water' : 'water+' + b;
+    var r = RECIPES[key];
+    if (!r) continue;
+    opts.push({ base: b, result: r });
+  }
+  S.choices = opts;
+  var html = '<div class="card"><h2>第 5 波结束 · 熔入第二元素</h2>' +
+    '<p class="dim">当前：水（普通攻击，无特性）。进化后普攻沿用<b>新元素的手感</b>，并获得特性。</p><div class="cards">';
+  for (var j = 0; j < opts.length; j++) {
+    var o = opts[j], e = ELEMS[o.result], pr = BASE_PROFILES[o.base], tr = TRAITS[o.result];
+    html += '<div class="ecard" data-i="' + j + '" style="color:' + e.c + '">' +
+      '<div class="orb" style="background:' + hexA(e.c, .16) + ';color:' + e.c + '">' + e.ch + '</div>' +
+      '<b>熔入·' + ELEMS[o.base].name + ' → ' + e.name + '</b>' +
+      '<span>特性：' + tr.name + '　单发 ' + pr.dmg + ' / 攻速 ' + (1 / pr.rate).toFixed(1) + '/s<br>' +
+      '失去：无（水没有特性）<br>获得：' + tr.name + '</span></div>';
   }
   html += '</div></div>';
   overlay.className = 'show';
   overlay.innerHTML = html;
-  var cards = overlay.querySelectorAll('.ecard,.ucard');
-  for (var j = 0; j < cards.length; j++) {
-    cards[j].onclick = function (e) {
-      var idx = parseInt(e.currentTarget.getAttribute('data-i'), 10);
-      chooseElement(idx);
+  var cards = overlay.querySelectorAll('.ecard');
+  for (var k = 0; k < cards.length; k++) {
+    cards[k].onclick = function (e) {
+      chooseElement(parseInt(e.currentTarget.getAttribute('data-i'), 10));
     };
   }
 }
@@ -624,57 +730,100 @@ function showElement() {
 function chooseElement(i) {
   var c = S.choices[i];
   if (!c) return;
-  if (c.type === 'skip') S.wall = Math.min(S.wallMax, S.wall + 15);
-  else { S.form = c.result; }
-  S.stats.upgrades.push(c.type === 'skip' ? '不进化' : ELEMS[c.result].name);
+  S.form = c.result;
+  S.formProfile = c.base;
+  // 不继承旧特性：特性类加成全部重置，通用属性保留
+  S.mods.stacksPerHit = 1;
+  S.mods.procPower = 1;
+  S.mods.procDur = 1;
+  S.mods.decayDelay = 3;
+  S.mods.perHitMul = 1;
+  S.stats.upgrades.push('熔入·' + ELEMS[c.base].name);
   S.choices = [];
   closeOverlay();
   startWave(S.wave + 1);
 }
 
-function effectText(p) {
-  var t = [];
-  if (p.splash) t.push('范围');
-  if (p.chain) t.push('连锁');
-  if (p.pierce) t.push('穿透');
-  if (p.slow) t.push('减速');
-  if (p.burn || p.dot) t.push('持续伤害');
-  if (p.knock) t.push('击退');
-  if (p.amp) t.push('易伤');
-  return t.join(' / ') || '单体';
+// 第 10 波：融合领域（第三元素，普攻形态不变）
+function domainOptions() {
+  var out = [];
+  var ids = Object.keys(ELEMS);
+  for (var i = 0; i < ids.length; i++) {
+    var b = ids[i];
+    if (b === S.form) continue;
+    var key = S.form < b ? S.form + '+' + b : b + '+' + S.form;
+    var r = RECIPES[key];
+    if (!r || REDUCE[key] || r === S.form) continue;
+    if (out.some(function (o) { return o.result === r; })) continue;
+    out.push({ result: r, base: b });
+  }
+  out.sort(function (a, b) {
+    var da = DOMAINS[a.result] ? 1 : 0, db = DOMAINS[b.result] ? 1 : 0;
+    if (db !== da) return db - da;
+    return ELEMS[b.result].tier - ELEMS[a.result].tier;
+  });
+  if (out.length < 3) out.push({ skip: true });
+  return out.slice(0, 3);
+}
+
+function showDomain() {
+  S.scene = 'choice';
+  S.choiceType = 'domain';
+  S.choices = domainOptions();
+  var html = '<div class="card"><h2>第 10 波结束 · 融合领域</h2>' +
+    '<p class="dim">第三元素不改变普攻形态，只解锁一个自动领域。当前普攻：' +
+    ELEMS[S.form].name + '（' + (TRAITS[S.form] ? TRAITS[S.form].name : '普通攻击') + '）</p><div class="cards">';
+  for (var i = 0; i < S.choices.length; i++) {
+    var c = S.choices[i];
+    if (c.skip) {
+      html += '<div class="ucard" data-i="' + i + '"><b>不融合</b><span>保留当前形态，城墙 +15</span></div>';
+    } else {
+      var d = domainOf(c.result), e = ELEMS[c.result];
+      html += '<div class="ecard" data-i="' + i + '" style="color:' + d.c + '">' +
+        '<div class="orb" style="background:' + hexA(d.c, .16) + ';color:' + d.c + '">' + e.ch + '</div>' +
+        '<b>' + d.name + '</b>' +
+        '<span>' + ELEMS[c.base].name + ' + ' + ELEMS[S.form].name + ' → ' + e.name + '<br>' +
+        d.desc + '<br>普攻形态不变</span></div>';
+    }
+  }
+  html += '</div></div>';
+  overlay.className = 'show';
+  overlay.innerHTML = html;
+  var cards = overlay.querySelectorAll('.ecard,.ucard');
+  for (var k = 0; k < cards.length; k++) {
+    cards[k].onclick = function (e) {
+      chooseDomain(parseInt(e.currentTarget.getAttribute('data-i'), 10));
+    };
+  }
+}
+
+function chooseDomain(i) {
+  var c = S.choices[i];
+  if (!c) return;
+  if (c.skip) S.wall = Math.min(S.wallMax, S.wall + 15);
+  else { S.domain = c.result; S.domainTimer = 2; }
+  S.stats.upgrades.push(c.skip ? '不融合' : domainOf(c.result).name);
+  S.choices = [];
+  closeOverlay();
+  startWave(S.wave + 1);
 }
 
 // ---------------------------------------------------------------- 覆盖层
 function closeOverlay() { overlay.className = ''; overlay.replaceChildren(); }
 
 function showTitle() {
-  S = newState(null, SEED);
+  S = newState('water', SEED);
   S.scene = 'title';
   overlay.className = 'show';
-  var html = '<div class="card"><h1>守城 · 沙盒 v0.3</h1>' +
-    '<p>一人守一城。<b>15 波</b>，城墙不塌就赢。自动攻击，你只负责构筑。</p>' +
-    '<p class="dim">第 5、10 波结束各熔入一个元素；第 2/4/7/9/12/14 波结束选强化。' +
-    '普攻攒满触发元素爆发。技能暂未加入。</p><div class="cards wrap">';
-  for (var i = 0; i < BASE.length; i++) {
-    var e = ELEMS[BASE[i]];
-    html += '<div class="ecard" data-i="' + i + '" style="color:' + e.c + '">' +
-      '<div class="orb" style="background:' + hexA(e.c, .16) + ';color:' + e.c + '">' + e.ch + '</div>' +
-      '<b>' + e.name + '系</b><span>' + startDesc(BASE[i]) + '</span></div>';
-  }
-  html += '</div></div>';
-  overlay.innerHTML = html;
-  var cards = overlay.querySelectorAll('.ecard');
-  for (var j = 0; j < cards.length; j++) {
-    cards[j].onclick = function (e) {
-      var idx = parseInt(e.currentTarget.getAttribute('data-i'), 10);
-      startRun(BASE[idx]);
-    };
-  }
-}
-
-function startDesc(id) {
-  var d = { fire: '火球：小范围 + 灼烧', water: '水箭：减速', wind: '风刃：弹射', earth: '石球：高伤 + 击退' };
-  return d[id] || '';
+  overlay.innerHTML = '<div class="card"><h1>守城 · 沙盒 v0.4</h1>' +
+    '<p>一人守一城。水系起手，<b>15 波</b>，城墙不塌就赢。</p>' +
+    '<p class="dim">水是普通攻击；第 5 波熔入火/风/土，获得 <b>5 层状态积累</b>：' +
+    '冰冻、电爆、毒爆… 第 10 波融合领域。每波结束都有奖励。</p>' +
+    '<div class="cards"><div class="ecard" style="color:#4aa3ff">' +
+    '<div class="orb" style="background:rgba(74,163,255,.16);color:#4aa3ff">水</div>' +
+    '<b>水系</b><span>普通水箭 · 单发 8 / 攻速 3.3/s<br>无特性，靠熔入元素获得</span></div></div>' +
+    '<button class="btn" id="startBtn">开始</button></div>';
+  document.getElementById('startBtn').onclick = function () { startRun('water'); };
 }
 
 function showLose() {
@@ -682,7 +831,8 @@ function showLose() {
   overlay.className = 'show';
   overlay.innerHTML = '<div class="card"><h2>城墙破了</h2>' +
     '<p class="dim">撑到第 ' + S.wave + ' 波 · 击杀 ' + S.stats.kills + '</p>' +
-    '<p class="mono">形态 ' + ELEMS[S.form].name + ' · 强化 ' + (S.stats.upgrades.join('、') || '无') + '</p>' +
+    '<p class="mono">形态 ' + ELEMS[S.form].name + (S.domain ? ' · ' + domainOf(S.domain).name : '') +
+    '<br>强化：' + (S.stats.upgrades.join('、') || '无') + '</p>' +
     '<button class="btn" id="againBtn">再来一局</button></div>';
   document.getElementById('againBtn').onclick = function () { showTitle(); };
 }
@@ -692,7 +842,8 @@ function showWin() {
   overlay.className = 'show';
   overlay.innerHTML = '<div class="card"><h2>守住了</h2>' +
     '<p class="dim">15 波结束 · 城墙剩余 ' + Math.round(S.wall) + ' · 击杀 ' + S.stats.kills + '</p>' +
-    '<p class="mono">最终形态 ' + ELEMS[S.form].name + '（' + tierName(elementTier(S.form)) + '）' +
+    '<p class="mono">最终形态 ' + ELEMS[S.form].name + '（' + (TRAITS[S.form] ? TRAITS[S.form].name : '普通攻击') + '）' +
+    (S.domain ? ' · ' + domainOf(S.domain).name : '') +
     ' · 元素爆发 ' + S.stats.ults + ' 次</p>' +
     '<p class="mono dim">强化：' + (S.stats.upgrades.join('、') || '无') + '</p>' +
     '<button class="btn" id="againBtn2">再来一局</button></div>';
@@ -704,11 +855,9 @@ function win() { showWin(); }
 
 function waveClear() {
   if (S.wave >= S.maxWave) { win(); return; }
-  if (ELEMENT_WAVES.indexOf(S.wave) >= 0) { showElement(); return; }
-  if (UPGRADE_WAVES.indexOf(S.wave) >= 0) { showUpgrade(); return; }
-  S.scene = 'between';
-  S.nextTimer = 1.2;
-  S.toast = { text: '第 ' + S.wave + ' 波清除 · 城墙 ' + Math.round(S.wall), t: 1.4 };
+  if (S.wave === 5) { showElement(); return; }
+  if (S.wave === 10) { showDomain(); return; }
+  showUpgrade();
 }
 
 function hexA(hex, a) {
@@ -739,7 +888,7 @@ function draw() {
 
   if (S.scene === 'title') return;
 
-  // 城外地表
+  // 地表线
   ctx.strokeStyle = 'rgba(120,160,200,0.05)';
   ctx.lineWidth = 1;
   for (i = 0; i < 8; i++) {
@@ -750,12 +899,20 @@ function draw() {
   }
 
   // 射程
-  if (S.form) {
-    var p = profile();
+  var p = profile();
+  ctx.beginPath();
+  ctx.arc(TURRET.x, TURRET.y, p.range, Math.PI, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(226,193,74,0.07)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // 领域氛围
+  if (S.domain) {
+    var dc = domainOf(S.domain).c;
     ctx.beginPath();
-    ctx.arc(TURRET.x, TURRET.y, p.range, Math.PI, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(226,193,74,0.07)';
-    ctx.lineWidth = 1.5;
+    ctx.arc(TURRET.x, TURRET.y - 4, 70, Math.PI, Math.PI * 2);
+    ctx.strokeStyle = hexA(dc, 0.18);
+    ctx.lineWidth = 6;
     ctx.stroke();
   }
 
@@ -765,16 +922,22 @@ function draw() {
     if (m.dead) continue;
     var T = TYPES[m.type];
     var r = T.r;
-    if (m.boss) r = T.r;
     ctx.beginPath();
     ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = m.burn ? '#ff7a45' : (m.dot ? '#7ed957' : T.color);
+    ctx.fillStyle = m.frozenT > 0 ? '#9fe8ff' : (m.dot ? '#7ed957' : T.color);
     ctx.globalAlpha = m.hurt > 0 ? 0.7 : 1;
     ctx.fill();
     ctx.globalAlpha = 1;
     if (m.slowT > 0) {
       ctx.strokeStyle = 'rgba(140,220,255,.8)';
       ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    if (m.frozenT > 0) {
+      ctx.strokeStyle = '#e8ffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, r + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
     if (S.mark === m.id) {
@@ -796,17 +959,29 @@ function draw() {
     ctx.fillRect(m.x - bw / 2, m.y - r - 9, bw, 4);
     ctx.fillStyle = m.boss ? '#e0603c' : '#5ad2b0';
     ctx.fillRect(m.x - bw / 2, m.y - r - 9, bw * Math.max(0, m.hp / m.max), 4);
+
+    // 5 层印记
+    var tr = TRAITS[S.form];
+    if (tr) {
+      for (var s = 0; s < STACK_MAX; s++) {
+        ctx.beginPath();
+        ctx.arc(m.x - 16 + s * 8, m.y - r - 18, 2.8, 0, Math.PI * 2);
+        ctx.fillStyle = s < m.stacks ? tr.c : 'rgba(255,255,255,.30)';
+        ctx.globalAlpha = m.procCd > 0 ? 0.35 : 1;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
   }
 
   // 子弹
   for (i = 0; i < S.shots.length; i++) {
-    var s = S.shots[i];
-    if (!S.form) continue;
-    ctx.strokeStyle = ELEMS[S.form].c;
+    var sh = S.shots[i];
+    ctx.strokeStyle = sh.color;
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(s.px, s.py);
-    ctx.lineTo(s.x, s.y);
+    ctx.moveTo(sh.px, sh.py);
+    ctx.lineTo(sh.x, sh.y);
     ctx.stroke();
   }
 
@@ -838,12 +1013,12 @@ function draw() {
   ctx.arc(TURRET.x, TURRET.y, 20, 0, Math.PI * 2);
   ctx.fillStyle = '#1a2637';
   ctx.fill();
-  ctx.strokeStyle = S.form ? ELEMS[S.form].c : '#2a3b52';
+  ctx.strokeStyle = ELEMS[S.form].c;
   ctx.lineWidth = 3;
   ctx.stroke();
-  ctx.fillStyle = S.form ? ELEMS[S.form].c : '#3d4c60';
+  ctx.fillStyle = ELEMS[S.form].c;
   ctx.font = 'bold 12px -apple-system,sans-serif';
-  ctx.fillText(S.form ? ELEMS[S.form].ch : '?', TURRET.x, TURRET.y + 1);
+  ctx.fillText(ELEMS[S.form].ch, TURRET.x, TURRET.y + 1);
 
   // 城墙
   var wallW = W - 80;
@@ -873,26 +1048,36 @@ function draw() {
   ctx.font = '12px ui-monospace,Menlo,monospace';
   ctx.fillText('击杀 ' + S.stats.kills + ' · 漏怪 ' + S.stats.leaks, 26, 56);
 
-  if (S.form) {
-    var pr = profile();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = ELEMS[S.form].c;
-    ctx.font = 'bold 18px -apple-system,sans-serif';
-    ctx.fillText(ELEMS[S.form].name + ' · ' + tierName(elementTier(S.form)), W / 2, 32);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = ELEMS[S.form].c;
+  ctx.font = 'bold 18px -apple-system,sans-serif';
+  ctx.fillText(ELEMS[S.form].name + ' · ' + tierName(ELEMS[S.form].tier), W / 2, 30);
+  ctx.fillStyle = '#5c6f85';
+  ctx.font = '11px ui-monospace,Menlo,monospace';
+  ctx.fillText((TRAITS[S.form] ? '特性：' + TRAITS[S.form].name : '普通攻击') +
+    ' · 单发 ' + p.dmg.toFixed(1) + ' · 攻速 ' + (1 / p.rate).toFixed(1) + '/s', W / 2, 52);
+
+  // 充能 + 领域
+  var cw = 190, cx = W - 26 - cw, cy = 24;
+  ctx.fillStyle = 'rgba(255,255,255,.07)';
+  roundRect(cx, cy, cw, 9, 4.5); ctx.fill();
+  ctx.fillStyle = ELEMS[S.form].c;
+  roundRect(cx, cy, cw * Math.min(1, S.charge / S.mods.chargeMax), 9, 4.5); ctx.fill();
+  ctx.fillStyle = '#7d8ca3';
+  ctx.font = '10.5px ui-monospace,Menlo,monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText('元素爆发 ' + S.charge + ' / ' + S.mods.chargeMax, W - 26, 48);
+
+  ctx.textAlign = 'right';
+  if (S.domain) {
+    var dom = domainOf(S.domain);
+    ctx.fillStyle = dom.c;
+    ctx.font = '12px -apple-system,sans-serif';
+    ctx.fillText(dom.name + ' · ' + Math.max(0, S.domainTimer).toFixed(1) + 's', W - 26, 70);
+  } else {
     ctx.fillStyle = '#5c6f85';
     ctx.font = '11px ui-monospace,Menlo,monospace';
-    ctx.fillText(effectText(FORMS[S.form]) + ' · 伤害 ' + pr.dmg.toFixed(1) + ' · 攻速 ' + (1 / pr.rate).toFixed(1) + '/s', W / 2, 54);
-
-    // 充能条
-    var cw = 190, cx = W - 26 - cw, cy = 26;
-    ctx.fillStyle = 'rgba(255,255,255,.07)';
-    roundRect(cx, cy, cw, 10, 5); ctx.fill();
-    ctx.fillStyle = ELEMS[S.form].c;
-    roundRect(cx, cy, cw * Math.min(1, S.charge / S.player.chargeMax), 10, 5); ctx.fill();
-    ctx.fillStyle = '#7d8ca3';
-    ctx.font = '10.5px ui-monospace,Menlo,monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText('元素爆发 ' + S.charge + ' / ' + S.player.chargeMax, W - 26, 50);
+    ctx.fillText('领域：第 10 波', W - 26, 70);
   }
 
   // 提示
@@ -955,12 +1140,21 @@ showTitle();
 
 if (_q && _q.get('autostart')) {
   var _el = _q.get('element');
-  if (BASE.indexOf(_el) < 0) _el = 'fire';
+  if (BASE.indexOf(_el) < 0) _el = 'water';
   startRun(_el, SEED);
   var _w = parseInt(_q.get('wave'), 10);
   if (_w > 1) {
     var _f = _q.get('form');
-    if (_f && ELEMS[_f]) { S.form = _f; }
+    if (_f && ELEMS[_f]) {
+      S.form = _f;
+      var _p = _q.get('profile');
+      if (_p && BASE_PROFILES[_p]) S.formProfile = _p;
+      else if (_f === 'ice') S.formProfile = 'wind';
+      else if (_f === 'thunder') S.formProfile = 'fire';
+      else if (_f === 'poison') S.formProfile = 'earth';
+    }
+    var _d = _q.get('domain');
+    if (_d && ELEMS[_d]) { S.domain = _d; S.domainTimer = 3; }
     if (_q.get('wall')) S.wall = Math.max(1, Math.min(100, parseInt(_q.get('wall'), 10) || 100));
     startWave(Math.min(MAX_WAVE, Math.max(1, _w)));
   }
@@ -983,11 +1177,14 @@ window.__CG = {
   update: update,
   chooseUpgrade: chooseUpgrade,
   chooseElement: chooseElement,
+  chooseDomain: chooseDomain,
   profile: profile,
   showTitle: showTitle,
-  FORMS: FORMS,
   ELEMS: ELEMS,
   RECIPES: RECIPES,
+  TRAITS: TRAITS,
+  DOMAINS: DOMAINS,
+  domainOf: domainOf,
   TYPES: TYPES,
   WAVES: WAVES,
   BASE: BASE,

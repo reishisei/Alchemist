@@ -1,4 +1,4 @@
-// 沙盒 v0.3 无头模拟：15 波、两次加元素、六次强化、城墙胜负
+// 沙盒 v0.4 无头模拟：水系起手、15 波、每波奖励、5 层印记、领域
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -10,10 +10,7 @@ const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function makeCtx() {
   const noop = () => {};
-  const c = {
-    createLinearGradient: () => ({ addColorStop: noop }),
-    measureText: () => ({ width: 10 })
-  };
+  const c = { createLinearGradient: () => ({ addColorStop: noop }), measureText: () => ({ width: 10 }) };
   for (const k of ['clearRect','fillRect','strokeRect','beginPath','closePath','arc','arcTo','rect',
     'moveTo','lineTo','stroke','fill','save','restore','translate','rotate','scale','clip',
     'fillText','strokeText','setLineDash','quadraticCurveTo','bezierCurveTo','ellipse','drawImage']) c[k] = noop;
@@ -41,7 +38,6 @@ function makeEl(ctx) {
 
 const ctx = makeCtx();
 const nodes = new Map();
-const el = () => { if (!nodes.has('_')) nodes.set('_', makeEl(ctx)); return nodes.get('_'); };
 const document = {
   getElementById(id) { if (!nodes.has(id)) nodes.set(id, makeEl(ctx)); return nodes.get(id); },
   createElement() { return makeEl(ctx); },
@@ -67,54 +63,68 @@ let fails = 0;
 const ok = (c, m) => { if (!c) { console.error('FAIL:', m); fails++; } };
 const MAX_FRAMES = 60 * 60 * 30;
 
-const results = [];
-for (const element of ['fire', 'water', 'wind', 'earth']) {
-  for (const seed of [1, 2, 3]) {
-    g.startRun(element, seed);
-    const S = g.state;
-    let frames = 0, choices = 0, formAt10 = null;
-    while (frames < MAX_FRAMES && S.scene !== 'win' && S.scene !== 'lose') {
-      if (S.scene === 'choice') {
-        if (S.wave >= 10 && formAt10 == null) formAt10 = S.form;
-        if (S.choiceType === 'element') {
-          g.chooseElement(0);           // 元素按结果等级降序，取最高级
-        } else {
-          var pref = { dmg: 9, rate: 8, range: 7, splash: 6, pierce: 6, chain: 6,
-                       slow: 5, dot: 5, knock: 4, amp: 5, charge: 3, wall: 1 };
-          var best = 0, bestScore = -1e9;
-          for (var ci = 0; ci < S.choices.length; ci++) {
-            var c = S.choices[ci];
-            var sc = pref[c.id] || 0;
-            if (c.id === 'wall' && S.wall < 55) sc += 100;
-            if (c.id === 'wall' && S.wall > 85) sc -= 50;
-            if (sc > bestScore) { bestScore = sc; best = ci; }
-          }
-          g.chooseUpgrade(best);
-        }
-        choices++;
-        continue;
-      }
-      g.update(1 / 60);
-      frames++;
-    }
-    const row = {
-      element, seed, scene: S.scene, wave: S.wave,
-      wall: Math.round(S.wall), kills: S.stats.kills,
-      form: S.form, tier: g.ELEMS[S.form].tier,
-      ults: S.stats.ults, choices,
-      time: +(frames / 60).toFixed(1),
-      upgrades: S.stats.upgrades.join(' / ')
-    };
-    results.push(row);
-    ok(S.scene === 'win' || S.scene === 'lose', `${element}/${seed} 没有结束`);
-    ok(frames < MAX_FRAMES, `${element}/${seed} 超时`);
-    ok(Number.isFinite(S.wall), `${element}/${seed} 城墙 NaN`);
-    if (S.scene === 'win') ok(S.wave === 15, `${element}/${seed} 赢了但不是 15 波`);
+const PREF = {
+  stack: 12, proc: 11, procDur: 10, perhit: 9, decay: 4,
+  domainPower: 12, domainCd: 11, domainRadius: 9,
+  dmg: 8, rate: 7, range: 6, charge: 5, wall: 1
+};
+
+function pickUpgrade(S) {
+  let best = 0, bestScore = -1e9;
+  for (let i = 0; i < S.choices.length; i++) {
+    const c = S.choices[i];
+    let sc = PREF[c.id] || 0;
+    if (c.id === 'wall' && S.wall < 55) sc += 100;
+    if (c.id === 'wall' && S.wall > 90) sc -= 40;
+    if (sc > bestScore) { bestScore = sc; best = i; }
   }
+  return best;
+}
+
+const results = [];
+for (const seed of [1, 2, 3]) {
+  g.startRun('water', seed);
+  const S = g.state;
+  let frames = 0, choices = 0, formAfter5 = null, domainAfter10 = null;
+
+  while (frames < MAX_FRAMES && S.scene !== 'win' && S.scene !== 'lose') {
+    if (S.scene === 'choice') {
+      if (S.choiceType === 'element') {
+        const idx = S.choices.findIndex(c => c.base === 'wind');
+        g.chooseElement(idx >= 0 ? idx : 0);
+        formAfter5 = S.form;
+      } else if (S.choiceType === 'domain') {
+        const idx = S.choices.findIndex(c => !c.skip && g.DOMAINS[c.result]);
+        g.chooseDomain(idx >= 0 ? idx : 0);
+        domainAfter10 = S.domain;
+      } else {
+        g.chooseUpgrade(pickUpgrade(S));
+      }
+      choices++;
+      continue;
+    }
+    g.update(1 / 60);
+    frames++;
+  }
+
+  const row = {
+    seed, scene: S.scene, wave: S.wave, wall: Math.round(S.wall),
+    kills: S.stats.kills, form: S.form, domain: S.domain,
+    choices, time: +(frames / 60).toFixed(1),
+    upgrades: S.stats.upgrades.join(' / ')
+  };
+  results.push(row);
+  ok(S.scene === 'win' || S.scene === 'lose', `seed ${seed} 没有结束`);
+  ok(frames < MAX_FRAMES, `seed ${seed} 超时`);
+  ok(Number.isFinite(S.wall), `seed ${seed} 城墙 NaN`);
+  ok(S.form === 'ice', `seed ${seed} 元素应进化成冰，实际 ${S.form}`);
+  ok(S.domain === 'frost', `seed ${seed} 领域应为霜雷，实际 ${S.domain}`);
+  ok(choices === 14, `seed ${seed} 应有 14 次奖励，实际 ${choices}`);
+  if (S.scene === 'win') ok(S.wave === 15, `seed ${seed} 赢了但不是 15 波`);
 }
 
 console.log(JSON.stringify(results, null, 2));
 const wins = results.filter(r => r.scene === 'win').length;
 console.log(`--- ${wins}/${results.length} 胜 · 失败 ${results.filter(r => r.scene === 'lose').length}`);
-console.log(fails === 0 ? 'PASS 沙盒 15 波流程' : `FAIL ${fails} 项`);
+console.log(fails === 0 ? 'PASS 沙盒 v0.4 流程' : `FAIL ${fails} 项`);
 process.exit(fails === 0 ? 0 : 1);
